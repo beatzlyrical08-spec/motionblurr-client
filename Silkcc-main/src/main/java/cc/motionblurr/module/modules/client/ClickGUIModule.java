@@ -1,6 +1,6 @@
 package cc.motionblurr.module.modules.client;
 
-import cc.motionblurr.gui.ClickGui_broken;
+import cc.motionblurr.gui.ClickGui;
 import cc.motionblurr.module.Category;
 import cc.motionblurr.module.Module;
 import cc.motionblurr.module.setting.ModeSetting;
@@ -19,7 +19,7 @@ public final class ClickGUIModule extends Module {
     @Override
     public void onEnable() {
         if (mc.currentScreen == null) {
-            mc.setScreen(new ClickGui_broken());
+            mc.setScreen(new ClickGui());
         }
         setEnabled(false);
     }

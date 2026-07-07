@@ -1,503 +1,63 @@
 package cc.motionblurr.gui;
 
 import cc.motionblurr.MotionBlurrClient;
-import cc.motionblurr.gui.animation.AnimationManager;
-import cc.motionblurr.gui.components.SettingsRenderer;
-import cc.motionblurr.gui.components.UIRenderer;
-import cc.motionblurr.gui.events.GuiEventHandler;
-import cc.motionblurr.gui.utils.SearchUtils;
 import cc.motionblurr.module.Category;
 import cc.motionblurr.module.Module;
-import cc.motionblurr.module.modules.client.ClickGUIModule;
-import cc.motionblurr.module.modules.client.NewClickGUIModule;
-import cc.motionblurr.module.setting.NumberSetting;
-import cc.motionblurr.utils.render.font.FontManager;
-import cc.motionblurr.utils.render.font.fonts.FontRenderer;
-import cc.motionblurr.gui.theme.Theme;
-import cc.motionblurr.gui.theme.ThemeManager;
+import cc.motionblurr.utils.render.RenderUtils;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 
-import java.awt.*;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-public final class ClickGui_broken extends Screen {
-    private static final Map<Module, Boolean> lastModuleExpanded = new HashMap<>();
-    private static final int SIDEBAR_WIDTH = 180;
-    private static final int CONTAINER_WIDTH = SIDEBAR_WIDTH + 600;
-    private static final int COLOR_PICKER_PANEL_WIDTH = 250;
-    private static final int HEADER_HEIGHT = 60;
-    private static final int MODULE_HEIGHT = 35;
-    private static final int PADDING = 18;
-    private static final int SETTING_HEIGHT = 28;
-    private static final int SEARCH_BAR_WIDTH = 200;
-    private static final int SEARCH_BAR_HEIGHT = 25;
-    private static Category lastSelectedCategory = Category.COMBAT;
-    private static int lastScrollOffset = 0;
-    private final Map<Module, Boolean> moduleExpanded = new HashMap<>();
-    private final Map<NumberSetting, Boolean> sliderDragging = new HashMap<>();
-    private final ColorPickerManager colorPickerManager;
-    private final AnimationManager animationManager;
-    private final GuiEventHandler eventHandler;
-    private final FontRenderer titleFont;
-    private final FontRenderer regularFont;
-    private final FontRenderer smallFont;
-    private final float typedTitleElapsed = 0f;
-    private final long lastCursorBlink = 0;
-    private final List<String> configs = new ArrayList<>();
-    private String configName = "";
-    private boolean configNameFocused = false;
-    private String selectedConfig = "";
+public final class ClickGui extends Screen {
 
-    public ClickGui_broken() {
-        super(Text.empty());
+    private Category selectedCategory = Category.COMBAT;
 
-        FontManager fontManager = MotionBlurrClient.INSTANCE.getFontManager();
-        this.titleFont = fontManager.getSize(24, FontManager.Type.Poppins);
-        this.regularFont = fontManager.getSize(14, FontManager.Type.Inter);
-        this.smallFont = fontManager.getSize(12, FontManager.Type.Inter);
+    private int scrollOffset = 0;
 
-        this.animationManager = new AnimationManager();
-        this.eventHandler = new GuiEventHandler(moduleExpanded, sliderDragging, lastSelectedCategory);
-        this.colorPickerManager = new ColorPickerManager(eventHandler);
+    private static final int BG = 0xEE101116;
+    private static final int PANEL = 0xFF171922;
+    private static final int PANEL_DARK = 0xFF111217;
+    private static final int CARD = 0xFF1C1F2A;
+    private static final int CARD_HOVER = 0xFF242838;
+    private static final int ACCENT = 0xFF8B5CF6;
+    private static final int TEXT = 0xFFFFFFFF;
+    private static final int TEXT_MUTED = 0xFF9AA0B2;
+    private static final int GREEN = 0xFF5CFF9B;
+    private static final int RED = 0xFFFF5C7A;
 
-        animationManager.initializeGuiAnimation();
-
-        for (Module module : MotionBlurrClient.INSTANCE.getModuleManager().getModules()) {
-            moduleExpanded.put(module, lastModuleExpanded.getOrDefault(module, false));
-            animationManager.initializeModuleAnimations(module);
-        }
-        eventHandler.setScrollOffset(lastScrollOffset);
-
-        loadConfigs();
+    public ClickGui() {
+        super(Text.literal("MotionBlurr"));
     }
 
     @Override
-    public void init() {
-        super.init();
-        animationManager.initializeGuiAnimation();
-    }
-
- 
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-        animationManager.updateAnimations(delta);
-        animationManager.updateGuiAnimations(delta);
-
-        if (animationManager.shouldCloseGui()) {
-            lastSelectedCategory = eventHandler.getSelectedCategory();
-            lastScrollOffset = eventHandler.getScrollOffset();
-            lastModuleExpanded.clear();
-            lastModuleExpanded.putAll(moduleExpanded);
-            MotionBlurrClient.INSTANCE.getModuleManager()
-        .getModule(NewClickGUIModule.class)
-        .ifPresent(module -> module.setEnabled(false));
-            super.close();
-            return;
-        }
-
-        int screenWidth = width;
-        int screenHeight = height;
-
-        renderBackground(context, mouseX, mouseY, delta);
-
-        MatrixStack matrices = context.getMatrices();
-        matrices.push();
-
-        float centerX = screenWidth / 2f;
-        float centerY = screenHeight / 2f;
-
-        matrices.translate(centerX, centerY, 0);
-        matrices.scale(animationManager.getScaleAnimation(), animationManager.getScaleAnimation(), 1f);
-        matrices.translate(-centerX, -centerY, 0);
-
-        int containerX = (screenWidth - CONTAINER_WIDTH) / 2;
-        int containerY = (screenHeight - 500) / 2;
-        int containerWidth = CONTAINER_WIDTH;
-        int containerHeight = 500;
-
-    int alpha = (int) (animationManager.getGuiAnimation() * 240);
-    Color containerColor = applyAlpha(theme.containerBg(), alpha);
-    context.fill(containerX, containerY, containerX + containerWidth, containerY + containerHeight, containerColor.getRGB());
-
-    renderSidebar(context, containerX, containerY, containerHeight, mouseX, mouseY);
-
-        renderContent(context, containerX + SIDEBAR_WIDTH, containerY, CONTAINER_WIDTH - SIDEBAR_WIDTH, containerHeight, mouseX, mouseY);
-
-        if (eventHandler.isAnyColorPickerExpanded()) {
-            int colorPickerPanelX = containerX + containerWidth + 10;
-            colorPickerManager.renderColorPickerPanel(context, colorPickerPanelX, containerY, COLOR_PICKER_PANEL_WIDTH, containerHeight, mouseX, mouseY);
-        }
-
-        renderHeader(context, containerX, containerY, containerWidth, mouseX, mouseY);
-
-        matrices.pop();
-
-
-    }
-
-
-    private void renderHeader(DrawContext context, int x, int y, int width, int mouseX, int mouseY) {
-        int headerAlpha = (int) (animationManager.getGuiAnimation() * 255);
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-        context.fill(x, y, x + width, y + HEADER_HEIGHT, applyAlpha(theme.headerBg(), headerAlpha).getRGB());
-        MatrixStack matrices = context.getMatrices();
-
-
-        String fullTitle = "MotionBlurr";
-        String title = fullTitle;
-        int titleX = x + PADDING;
-        int titleY = y + 15;
-        int textAlpha = (int) (animationManager.getGuiAnimation() * 255);
-        titleFont.drawString(matrices, title, titleX, titleY, new Color(255, 255, 255, textAlpha));
-        int verX = titleX + (int) titleFont.getStringWidth(fullTitle) + 8;
-        int verY = titleY + 6;
-        smallFont.drawString(matrices, MotionBlurrClient.CLIENT_VERSION, verX, verY, new Color(180, 180, 200, textAlpha));
-
-        renderSearchBar(context, x, y, width);
-    }
-
-    private void renderSearchBar(DrawContext context, int x, int y, int width) {
-        MatrixStack matrices = context.getMatrices();
-
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-
-        int searchX = x + width - SEARCH_BAR_WIDTH - PADDING;
-        int searchY = y + (HEADER_HEIGHT - SEARCH_BAR_HEIGHT) / 2;
-
-        String displayText = eventHandler.getSearchQuery().isEmpty() ? "Search modules..." : eventHandler.getSearchQuery();
-    Color textColor = eventHandler.getSearchQuery().isEmpty() ? applyAlpha(theme.muted(), 180) : theme.text();
-        int textX = searchX + 8;
-        int textY = searchY + (SEARCH_BAR_HEIGHT - 12) / 2 + 2;
-
-        String clippedText = displayText;
-        float maxTextWidth = SEARCH_BAR_WIDTH - 16;
-        while (smallFont.getStringWidth(clippedText) > maxTextWidth && clippedText.length() > 0) {
-            clippedText = clippedText.substring(0, clippedText.length() - 1);
-        }
-    context.fill(searchX, searchY, searchX + SEARCH_BAR_WIDTH, (searchY + SEARCH_BAR_HEIGHT) - 2,
-        applyAlpha(theme.panelBg(), 220).getRGB());
-    smallFont.drawString(matrices, clippedText, textX, textY - 4, textColor);
-
-        if (eventHandler.isSearchFocused() && !eventHandler.getSearchQuery().isEmpty()) {
-            long currentTime = System.currentTimeMillis();
-            if ((currentTime - lastCursorBlink) % 1000 < 500) {
-                int cursorX = textX + (int) smallFont.getStringWidth(clippedText);
-                context.fill(cursorX, textY - 1, cursorX + 1, textY + 11, theme.text().getRGB());
-            }
-        }
-    }
-
-    private void renderSidebar(DrawContext context, int x, int y, int height, int mouseX, int mouseY) {
-        int sidebarAlpha = (int) (animationManager.getGuiAnimation() * 255);
-    Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-    Color sb = applyAlpha(theme.sidebarBg(), sidebarAlpha);
-    context.fill(x, y + HEADER_HEIGHT, x + SIDEBAR_WIDTH, y + height - 12, sb.getRGB());
-    context.fill(x + 12, y + height - 12, x + SIDEBAR_WIDTH, y + height, sb.getRGB());
-
-        int sidebarX = x;
-        int sidebarY = y + HEADER_HEIGHT;
-
-        MatrixStack matrices = context.getMatrices();
-        int categoryY = sidebarY + PADDING;
-
-        for (Category category : Category.values()) {
-            boolean isSelected = category == eventHandler.getSelectedCategory();
-            boolean isHovered = mouseX >= sidebarX && mouseX <= sidebarX + SIDEBAR_WIDTH &&
-                    mouseY >= categoryY && mouseY <= categoryY + 35;
-
-            float targetAnimation = isSelected ? 1f : (isHovered ? 0.3f : 0f);
-            float currentAnimation = animationManager.getCategoryAnimation(category);
-            float newAnimation = MathHelper.lerp(0.15f, currentAnimation, targetAnimation);
-            animationManager.setCategoryAnimation(category, newAnimation);
-            Color textColor = isSelected ? Color.WHITE : new Color(190, 190, 190);
-            regularFont.drawString(matrices, category.getName(), sidebarX + 20, categoryY + 13, textColor);
-
-            categoryY += 45;
-        }
-    }
-
-    private void renderContent(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
-    Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-    int contentAlpha = (int) (animationManager.getGuiAnimation() * animationManager.getCategorySwitch() * 255);
-    Color panel = applyAlpha(theme.panelBg(), contentAlpha);
-    context.fill(x, y + HEADER_HEIGHT, x + width, y + height - 12, panel.getRGB());
-    context.fill(x, y + height - 12, x + width - 12, y + height, panel.getRGB());
-
-        context.enableScissor(x, y + HEADER_HEIGHT, x + width, y + height);
-
-        if (eventHandler.getSelectedCategory() == Category.CONFIG) {
-            renderConfigContent(context, x, y, width, height, mouseX, mouseY);
-        } else {
-            renderModuleContent(context, x, y, width, height, mouseX, mouseY);
-        }
-
-        context.disableScissor();
-    }
-
-    private void renderModuleContent(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
-        MatrixStack matrices = context.getMatrices();
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-
-        List<Module> allModules;
-        if (eventHandler.getSearchQuery().isEmpty()) {
-            allModules = MotionBlurrClient.INSTANCE.getModuleManager().getModulesInCategory(eventHandler.getSelectedCategory());
-        } else {
-            allModules = MotionBlurrClient.INSTANCE.getModuleManager().getModules();
-        }
-        List<Module> modules = filterModulesBySearch(allModules);
-
-        int moduleY = y + HEADER_HEIGHT + PADDING - eventHandler.getScrollOffset();
-        int totalContentHeight = PADDING;
-
-        for (Module module : modules) {
-            int moduleHeight = MODULE_HEIGHT + 5;
-            if (moduleExpanded.get(module)) {
-                moduleHeight += (int) (animationManager.getDropdownAnimation(module) * SettingsRenderer.getModuleSettingsHeight(module, SETTING_HEIGHT, eventHandler));
-            }
-
-            totalContentHeight += moduleHeight;
-
-            if (moduleY + moduleHeight < y + HEADER_HEIGHT) {
-                moduleY += moduleHeight;
-                continue;
-            }
-
-            if (moduleY > y + height) break;
-
-            boolean isHovered = mouseX >= x + PADDING && mouseX <= x + width - PADDING &&
-                    mouseY >= moduleY && mouseY <= moduleY + MODULE_HEIGHT;
-            boolean isEnabled = module.isEnabled();
-            boolean hasSettings = module.getSettings() != null && !module.getSettings().isEmpty();
-
-            float targetAnimation = isEnabled ? 1f : (isHovered ? 0.2f : 0f);
-            float currentAnimation = animationManager.getModuleAnimation(module);
-            float newAnimation = MathHelper.lerp(0.12f, currentAnimation, targetAnimation);
-            animationManager.setModuleAnimation(module, newAnimation);
-
-            float targetDropdown = moduleExpanded.get(module) ? 1f : 0f;
-            float currentDropdown = animationManager.getDropdownAnimation(module);
-            float newDropdown = MathHelper.lerp(0.15f, currentDropdown, targetDropdown);
-            animationManager.setDropdownAnimation(module, newDropdown);
-
-            Color bgColor = isHovered ? applyAlpha(theme.panelAltBg(), 220) : applyAlpha(theme.panelBg(), 140);
-        context.fill(x + PADDING, moduleY, x + width - PADDING, moduleY + MODULE_HEIGHT, bgColor.getRGB());
-        // draw a subtle border so modules keep their box outline under themes
-        context.drawBorder(x + PADDING, moduleY, width - PADDING * 2, MODULE_HEIGHT, applyAlpha(theme.muted(), 120).getRGB());
-            int indicatorAlpha = isEnabled ? (int) (newAnimation * 255) : 0;
-            if (indicatorAlpha > 0) {
-                Color indicator = applyAlpha(theme.accent(), indicatorAlpha);
-                context.fill(x + PADDING, moduleY, x + PADDING + 4, moduleY + MODULE_HEIGHT, indicator.getRGB());
-            }
-            Color textColor = isEnabled ? theme.text() : theme.muted();
-            if (hasSettings) {
-                UIRenderer.renderDropdownArrow(context, x + width - PADDING - 30, moduleY + MODULE_HEIGHT / 2,
-                        moduleExpanded.get(module), theme.muted());
-            }
-
-            regularFont.drawString(matrices, module.getDisplayName(), x + PADDING + 10, moduleY + 8, textColor);
-
-            if (module.getDescription() != null && !module.getDescription().isEmpty()) {
-                float descWidth = smallFont.getStringWidth(module.getDescription());
-                float maxDescWidth = width - PADDING - 30 - 100;
-                if (descWidth > maxDescWidth) {
-                    String truncated = module.getDescription();
-                    while (smallFont.getStringWidth(truncated + "...") > maxDescWidth && truncated.length() > 1) {
-                        truncated = truncated.substring(0, truncated.length() - 1);
-                    }
-                    truncated += "...";
-                    descWidth = smallFont.getStringWidth(truncated);
-            smallFont.drawString(matrices, truncated,
-                x + width - PADDING - descWidth - (hasSettings ? 40 : 10), moduleY + 10, theme.muted());
-                } else {
-            smallFont.drawString(matrices, module.getDescription(),
-                x + width - PADDING - descWidth - (hasSettings ? 40 : 10), moduleY + 10, theme.muted());
-                }
-            }
-
-            moduleY += MODULE_HEIGHT + 5;
-
-            if (hasSettings && newDropdown > 0.05f) {
-                int settingsHeight = renderModuleSettings(context, module, x, moduleY, width, newDropdown);
-                moduleY += (int) (newDropdown * settingsHeight);
-            }
-        }
-
-        totalContentHeight += PADDING;
-        int visibleHeight = height - HEADER_HEIGHT;
-        eventHandler.updateMaxScrollOffset(totalContentHeight, visibleHeight);
-    }
-
-    private void renderConfigContent(DrawContext context, int x, int y, int width, int height, int mouseX, int mouseY) {
-        MatrixStack matrices = context.getMatrices();
-        int startY = y + HEADER_HEIGHT + PADDING - eventHandler.getScrollOffset();
-        int currentY = startY;
-
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-    titleFont.drawString(matrices, "Config Manager", x + PADDING, currentY, theme.text());
-        currentY += 50;
-
-        context.fill(x + PADDING, currentY, x + width - PADDING, currentY + 30, applyAlpha(theme.panelBg(), 200).getRGB());
-        String displayText = configName.isEmpty() ? "Enter config name..." : configName;
-        Color textColor = configName.isEmpty() ? applyAlpha(theme.muted(), 180) : theme.text();
-        regularFont.drawString(matrices, displayText, x + PADDING + 8, currentY + 8, textColor);
-
-        if (configNameFocused && !configName.isEmpty()) {
-            long currentTime = System.currentTimeMillis();
-            if ((currentTime - lastCursorBlink) % 1000 < 500) {
-                int cursorX = x + PADDING + 8 + (int) regularFont.getStringWidth(configName);
-                context.fill(cursorX, currentY + 6, cursorX + 1, currentY + 24, Color.WHITE.getRGB());
-            }
-        }
-        currentY += 40;
-
-    renderConfigButton(context, x + PADDING, currentY, 80, 25, "Save", theme.accent(), mouseX, mouseY);
-    renderConfigButton(context, x + PADDING + 90, currentY, 80, 25, "Load", applyAlpha(theme.panelAltBg(), 200), mouseX, mouseY);
-    renderConfigButton(context, x + PADDING + 180, currentY, 80, 25, "Delete", new Color(200, 80, 80), mouseX, mouseY);
-        currentY += 40;
-
-        regularFont.drawString(matrices, "Available Configs:", x + PADDING, currentY, new Color(180, 180, 180));
-        currentY += 25;
-
-        for (String config : configs) {
-            boolean isHovered = mouseX >= x + PADDING && mouseX <= x + width - PADDING &&
-                    mouseY >= currentY && mouseY <= currentY + 25;
-            boolean isSelected = config.equals(selectedConfig);
-
-        Color bgColor = isSelected ? applyAlpha(theme.accent(), 170) : (isHovered ? applyAlpha(theme.panelAltBg(), 160) : applyAlpha(theme.panelBg(), 120));
-        context.fill(x + PADDING, currentY, x + width - PADDING, currentY + 25, bgColor.getRGB());
-
-        Color itemTextColor = isSelected ? theme.text() : theme.muted();
-        regularFont.drawString(matrices, config, x + PADDING + 8, currentY + 6, itemTextColor);
-
-            currentY += 30;
-        }
-
-        int totalContentHeight = currentY - startY + PADDING;
-        int visibleHeight = height - HEADER_HEIGHT;
-        eventHandler.updateMaxScrollOffset(totalContentHeight, visibleHeight);
-    }
-
-    private void renderConfigButton(DrawContext context, int x, int y, int width, int height, String text, Color baseColor, int mouseX, int mouseY) {
-        boolean isHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
-        // clamp RGB so hovering doesn't produce values >255 which throws IllegalArgumentException
-        Color buttonColor;
-        if (isHovered) {
-            int r = Math.max(0, Math.min(255, baseColor.getRed() + 20));
-            int g = Math.max(0, Math.min(255, baseColor.getGreen() + 20));
-            int b = Math.max(0, Math.min(255, baseColor.getBlue() + 20));
-            int a = baseColor.getAlpha();
-            buttonColor = new Color(r, g, b, a);
-        } else {
-            buttonColor = baseColor;
-        }
-        context.fill(x, y, x + width, y + height, buttonColor.getRGB());
-
-        int textX = x + (width - (int) smallFont.getStringWidth(text)) / 2;
-        int textY = y + (height - 12) / 2;
-        Theme theme = ThemeManager.getTheme(ClickGUIModule.theme.getMode());
-        smallFont.drawString(context.getMatrices(), text, textX, textY, theme.text());
-    }
-
-    private List<Module> filterModulesBySearch(List<Module> modules) {
-        return SearchUtils.filterModulesBySearch(modules, eventHandler.getSearchQuery());
-    }
-
-    private int renderModuleSettings(DrawContext context, Module module, int x, int moduleY, int width, float animation) {
-        return SettingsRenderer.renderModuleSettings(context, module, x, moduleY, width, animation, smallFont, eventHandler.getDropdownExpanded(), eventHandler);
-    }
-
-    private boolean handleColorPickerClicks(double mouseX, double mouseY, int button) {
-        return colorPickerManager.handleColorPickerClicks(mouseX, mouseY, button);
+    public boolean shouldPause() {
+        return false;
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button < 0 || button > 8) return false;
-
-        if (eventHandler.getSelectedCategory() == Category.CONFIG && handleConfigClick(mouseX, mouseY, button)) {
-            return true;
+    public void close() {
+        if (client != null) {
+            client.setScreen(null);
         }
-
-        if (handleColorPickerClicks(mouseX, mouseY, button)) {
-            return true;
-        }
-
-        List<Module> allModules;
-        if (eventHandler.getSearchQuery().isEmpty()) {
-            allModules = MotionBlurrClient.INSTANCE.getModuleManager().getModulesInCategory(eventHandler.getSelectedCategory());
-        } else {
-            allModules = MotionBlurrClient.INSTANCE.getModuleManager().getModules();
-        }
-        List<Module> modules = filterModulesBySearch(allModules);
-
-        return eventHandler.handleMouseClick(mouseX, mouseY, button, width, height, modules) ||
-                super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (colorPickerManager.handleColorPickerDrag(mouseX, mouseY, button, deltaX, deltaY)) {
-            return true;
-        }
-
-        return eventHandler.handleMouseDrag(mouseX, mouseY, button, deltaX, deltaY, width, height);
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (colorPickerManager.handleColorPickerRelease(mouseX, mouseY, button)) {
-            return true;
-        }
-
-        return eventHandler.handleMouseRelease(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        return eventHandler.handleMouseScroll(mouseX, mouseY, horizontalAmount, verticalAmount, height) ||
-                super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-
-        if (configNameFocused) {
-            if (keyCode == GLFW.GLFW_KEY_ENTER) {
-                saveConfig();
-                configNameFocused = false;
-                return true;
-            } else if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
-                if (!configName.isEmpty()) {
-                    configName = configName.substring(0, configName.length() - 1);
-                }
-                return true;
-            } else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-                configNameFocused = false;
-                return true;
-            }
-        }
-
-        if (colorPickerManager.handleColorPickerKeyPress(keyCode)) {
-            return true;
-        }
-        if (eventHandler.handleKeyPress(keyCode, scanCode, modifiers)) {
-            return true;
-        }
-
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            lastSelectedCategory = eventHandler.getSelectedCategory();
-            lastScrollOffset = eventHandler.getScrollOffset();
-            lastModuleExpanded.clear();
-            lastModuleExpanded.putAll(moduleExpanded);
             close();
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_UP) {
+            scrollOffset = Math.max(0, scrollOffset - 1);
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_DOWN) {
+            scrollOffset++;
             return true;
         }
 
@@ -505,104 +65,303 @@ public final class ClickGui_broken extends Screen {
     }
 
     @Override
-    public boolean charTyped(char chr, int modifiers) {
-        if (configNameFocused && chr >= 32 && chr < 127) {
-            if (configName.length() < 20) {
-                configName += chr;
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        int guiWidth = Math.min(760, width - 24);
+        int guiHeight = Math.min(430, height - 24);
+
+        int x = (width - guiWidth) / 2;
+        int y = (height - guiHeight) / 2;
+
+        int sidebarWidth = 150;
+        int headerHeight = 46;
+
+        drawBackground(context);
+        drawMainWindow(context, x, y, guiWidth, guiHeight);
+        drawHeader(context, x, y, guiWidth, headerHeight);
+        drawSidebar(context, x, y + headerHeight, sidebarWidth, guiHeight - headerHeight, mouseX, mouseY);
+        drawModules(context, x + sidebarWidth, y + headerHeight, guiWidth - sidebarWidth, guiHeight - headerHeight, mouseX, mouseY);
+    }
+
+    private void drawBackground(DrawContext context) {
+        context.fill(0, 0, width, height, 0x88000000);
+    }
+
+    private void drawMainWindow(DrawContext context, int x, int y, int w, int h) {
+        RenderUtils.drawRoundedRect(context, x, y, w, h, 14, BG);
+        RenderUtils.drawRoundedRect(context, x + 4, y + 4, w - 8, h - 8, 12, 0x66171922);
+    }
+
+    private void drawHeader(DrawContext context, int x, int y, int w, int h) {
+        RenderUtils.drawRoundedRect(context, x + 8, y + 8, w - 16, h - 10, 10, PANEL_DARK);
+
+        context.drawText(
+                textRenderer,
+                "MotionBlurr",
+                x + 22,
+                y + 21,
+                TEXT,
+                false
+        );
+
+        context.drawText(
+                textRenderer,
+                "ClickGUI rewrite v1",
+                x + 105,
+                y + 22,
+                TEXT_MUTED,
+                false
+        );
+
+        String closeText = "ESC to close";
+        context.drawText(
+                textRenderer,
+                closeText,
+                x + w - textRenderer.getWidth(closeText) - 22,
+                y + 22,
+                TEXT_MUTED,
+                false
+        );
+    }
+
+    private void drawSidebar(DrawContext context, int x, int y, int w, int h, int mouseX, int mouseY) {
+        RenderUtils.drawRoundedRect(context, x + 8, y + 6, w - 14, h - 14, 12, PANEL_DARK);
+
+        int itemX = x + 16;
+        int itemY = y + 18;
+        int itemW = w - 30;
+        int itemH = 25;
+
+        for (Category category : Category.values()) {
+            boolean selected = category == selectedCategory;
+            boolean hovered = isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH);
+
+            int color = selected ? ACCENT : hovered ? CARD_HOVER : 0x00000000;
+
+            if (selected || hovered) {
+                RenderUtils.drawRoundedRect(context, itemX, itemY, itemW, itemH, 7, color);
             }
-            return true;
+
+            context.drawText(
+                    textRenderer,
+                    category.getName(),
+                    itemX + 10,
+                    itemY + 8,
+                    selected ? TEXT : TEXT_MUTED,
+                    false
+            );
+
+            itemY += itemH + 6;
         }
-        if (colorPickerManager.handleColorPickerCharTyped(chr)) return true;
-        return eventHandler.handleCharTyped(chr, modifiers) || super.charTyped(chr, modifiers);
+    }
+
+    private void drawModules(DrawContext context, int x, int y, int w, int h, int mouseX, int mouseY) {
+        RenderUtils.drawRoundedRect(context, x + 4, y + 6, w - 12, h - 14, 12, PANEL);
+
+        context.drawText(
+                textRenderer,
+                selectedCategory.getName(),
+                x + 22,
+                y + 20,
+                TEXT,
+                false
+        );
+
+        List<Module> modules = MotionBlurrClient.INSTANCE
+                .getModuleManager()
+                .getModulesByCategory(selectedCategory);
+
+        int startX = x + 18;
+        int startY = y + 46;
+        int cardW = w - 42;
+        int cardH = 42;
+        int gap = 8;
+
+        int maxVisible = Math.max(1, (h - 60) / (cardH + gap));
+        int maxScroll = Math.max(0, modules.size() - maxVisible);
+        scrollOffset = clamp(scrollOffset, 0, maxScroll);
+
+        int visibleIndex = 0;
+
+        for (int i = scrollOffset; i < modules.size(); i++) {
+            if (visibleIndex >= maxVisible) break;
+
+            Module module = modules.get(i);
+
+            int cardY = startY + visibleIndex * (cardH + gap);
+            drawModuleCard(context, module, startX, cardY, cardW, cardH, mouseX, mouseY);
+
+            visibleIndex++;
+        }
+
+        if (modules.isEmpty()) {
+            context.drawText(
+                    textRenderer,
+                    "No modules in this category.",
+                    startX,
+                    startY,
+                    TEXT_MUTED,
+                    false
+            );
+        }
+
+        if (modules.size() > maxVisible) {
+            String scrollText = "Use UP / DOWN arrows to scroll";
+            context.drawText(
+                    textRenderer,
+                    scrollText,
+                    x + w - textRenderer.getWidth(scrollText) - 24,
+                    y + h - 28,
+                    TEXT_MUTED,
+                    false
+            );
+        }
+    }
+
+    private void drawModuleCard(DrawContext context, Module module, int x, int y, int w, int h, int mouseX, int mouseY) {
+        boolean hovered = isHovered(mouseX, mouseY, x, y, w, h);
+        boolean enabled = module.isEnabled();
+
+        int bg = hovered ? CARD_HOVER : CARD;
+
+        RenderUtils.drawRoundedRect(context, x, y, w, h, 9, bg);
+
+        if (enabled) {
+            RenderUtils.drawRoundedRect(context, x, y, 4, h, 3, ACCENT);
+        }
+
+        String name = module.getDisplayName();
+        String description = module.getDescription();
+
+        context.drawText(
+                textRenderer,
+                name,
+                x + 14,
+                y + 9,
+                enabled ? TEXT : 0xFFE6E6E6,
+                false
+        );
+
+        if (description != null && !description.isEmpty()) {
+            context.drawText(
+                    textRenderer,
+                    shorten(description, 58),
+                    x + 14,
+                    y + 25,
+                    TEXT_MUTED,
+                    false
+            );
+        }
+
+        int toggleW = 38;
+        int toggleH = 16;
+        int toggleX = x + w - toggleW - 14;
+        int toggleY = y + 13;
+
+        RenderUtils.drawRoundedRect(
+                context,
+                toggleX,
+                toggleY,
+                toggleW,
+                toggleH,
+                8,
+                enabled ? 0xAA8B5CF6 : 0xFF303442
+        );
+
+        int knobSize = 12;
+        int knobX = enabled ? toggleX + toggleW - knobSize - 2 : toggleX + 2;
+        int knobY = toggleY + 2;
+
+        RenderUtils.drawRoundedRect(
+                context,
+                knobX,
+                knobY,
+                knobSize,
+                knobSize,
+                6,
+                enabled ? GREEN : RED
+        );
     }
 
     @Override
-    public void close() {
-        animationManager.startClosingAnimation();
-    }
-
-    private void loadConfigs() {
-        configs.clear();
-        File profileDir = MotionBlurrClient.INSTANCE.getProfileManager().getProfileDir();
-        if (profileDir.exists() && profileDir.isDirectory()) {
-            File[] files = profileDir.listFiles((dir, name) -> name.endsWith(".json"));
-            if (files != null) {
-                for (File file : files) {
-                    configs.add(file.getName().replace(".json", ""));
-                }
-            }
-        }
-    }
-
-    private static Color applyAlpha(Color base, int alpha) {
-        int a = Math.max(0, Math.min(255, alpha));
-        return new Color(base.getRed(), base.getGreen(), base.getBlue(), a);
-    }
-
-    private boolean handleConfigClick(double mouseX, double mouseY, int button) {
-        int screenWidth = width;
-        int screenHeight = height;
-        int containerX = (screenWidth - CONTAINER_WIDTH) / 2;
-        int containerY = (screenHeight - 500) / 2;
-        int contentX = containerX + SIDEBAR_WIDTH;
-        int contentY = containerY + HEADER_HEIGHT + PADDING - eventHandler.getScrollOffset();
-
-        int inputY = contentY + 50;
-        if (mouseY >= inputY && mouseY <= inputY + 30) {
-            configNameFocused = true;
-            return true;
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return super.mouseClicked(mouseX, mouseY, button);
         }
 
-        int buttonY = inputY + 40;
-        if (mouseY >= buttonY && mouseY <= buttonY + 25) {
-            if (mouseX >= contentX + PADDING && mouseX <= contentX + PADDING + 80) {
-                saveConfig();
-                return true;
-            } else if (mouseX >= contentX + PADDING + 90 && mouseX <= contentX + PADDING + 170) {
-                loadConfig();
-                return true;
-            } else if (mouseX >= contentX + PADDING + 180 && mouseX <= contentX + PADDING + 260) {
-                deleteConfig();
+        int guiWidth = Math.min(760, width - 24);
+        int guiHeight = Math.min(430, height - 24);
+
+        int x = (width - guiWidth) / 2;
+        int y = (height - guiHeight) / 2;
+
+        int sidebarWidth = 150;
+        int headerHeight = 46;
+
+        int itemX = x + 16;
+        int itemY = y + headerHeight + 18;
+        int itemW = sidebarWidth - 30;
+        int itemH = 25;
+
+        for (Category category : Category.values()) {
+            if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
+                selectedCategory = category;
+                scrollOffset = 0;
                 return true;
             }
+
+            itemY += itemH + 6;
         }
 
-        int listY = buttonY + 65;
-        for (String config : configs) {
-            if (mouseY >= listY && mouseY <= listY + 25) {
-                selectedConfig = config;
-                configName = config;
+        List<Module> modules = MotionBlurrClient.INSTANCE
+                .getModuleManager()
+                .getModulesByCategory(selectedCategory);
+
+        int modulesX = x + sidebarWidth;
+        int modulesY = y + headerHeight;
+        int modulesW = guiWidth - sidebarWidth;
+        int modulesH = guiHeight - headerHeight;
+
+        int startX = modulesX + 18;
+        int startY = modulesY + 46;
+        int cardW = modulesW - 42;
+        int cardH = 42;
+        int gap = 8;
+
+        int maxVisible = Math.max(1, (modulesH - 60) / (cardH + gap));
+        int maxScroll = Math.max(0, modules.size() - maxVisible);
+        scrollOffset = clamp(scrollOffset, 0, maxScroll);
+
+        int visibleIndex = 0;
+
+        for (int i = scrollOffset; i < modules.size(); i++) {
+            if (visibleIndex >= maxVisible) break;
+
+            Module module = modules.get(i);
+
+            int cardY = startY + visibleIndex * (cardH + gap);
+
+            if (isHovered(mouseX, mouseY, startX, cardY, cardW, cardH)) {
+                module.toggle();
                 return true;
             }
-            listY += 30;
+
+            visibleIndex++;
         }
 
-        configNameFocused = false;
-        return false;
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    private void saveConfig() {
-        if (!configName.trim().isEmpty()) {
-            MotionBlurrClient.INSTANCE.getProfileManager().saveProfile(configName.trim(), true);
-            loadConfigs();
-            selectedConfig = configName.trim();
-        }
+    private boolean isHovered(double mouseX, double mouseY, int x, int y, int w, int h) {
+        return mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
     }
 
-    private void loadConfig() {
-        if (!selectedConfig.isEmpty()) {
-            MotionBlurrClient.INSTANCE.getProfileManager().loadProfile(selectedConfig);
-        }
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
-    private void deleteConfig() {
-        if (!selectedConfig.isEmpty()) {
-            File configFile = new File(MotionBlurrClient.INSTANCE.getProfileManager().getProfileDir(), selectedConfig + ".json");
-            if (configFile.exists() && configFile.delete()) {
-                loadConfigs();
-                selectedConfig = "";
-                configName = "";
-            }
-        }
+    private String shorten(String text, int maxLength) {
+        if (text == null) return "";
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength - 3) + "...";
     }
 }

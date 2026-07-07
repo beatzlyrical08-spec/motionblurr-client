@@ -1,6 +1,6 @@
 package cc.motionblurr.mixin;
 
-import cc.motionblurr.gui.ClickGui_broken;
+import cc.motionblurr.gui.ClickGui;
 import cc.motionblurr.gui.newgui.NewClickGUI;
 import cc.motionblurr.gui.modern.ClickGUI;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -25,7 +25,7 @@ public abstract class ScreenMixin {
     private void renderBackgroundInject(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         if (client == null) return;
         Screen currentScreen = client.currentScreen;
-        if (currentScreen instanceof ClickGui_broken || currentScreen instanceof ClickGUI) {
+        if (currentScreen instanceof ClickGui || currentScreen instanceof ClickGUI) {
             ci.cancel();
             return;
         }
@@ -38,7 +38,7 @@ public abstract class ScreenMixin {
     private void onRenderTail(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci) {
         if (client == null) return;
         Screen currentScreen = client.currentScreen;
-        if (currentScreen instanceof NewClickGUI || currentScreen instanceof ClickGui_broken || currentScreen instanceof ClickGUI) {
+        if (currentScreen instanceof NewClickGUI || currentScreen instanceof ClickGui || currentScreen instanceof ClickGUI) {
             RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();

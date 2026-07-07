@@ -7,7 +7,7 @@ import cc.motionblurr.event.impl.player.ItemUseEvent;
 import cc.motionblurr.utils.IMinecraft;
 import cc.motionblurr.event.impl.player.TickEvent;
 import cc.motionblurr.event.impl.world.WorldChangeEvent;
-import cc.motionblurr.gui.ClickGui_broken;
+import cc.motionblurr.gui.ClickGui;
 import cc.motionblurr.module.modules.client.ClickGUIModule;
 import cc.motionblurr.module.modules.client.Client;
 import cc.motionblurr.profiles.ProfileManager;
@@ -73,9 +73,9 @@ public class MinecraftClientMixin implements IMinecraft {
         if (optionalClickGuiModule.isPresent()) {
             ClickGUIModule clickGuiModule = optionalClickGuiModule.get();
             if (clickGuiModule.isEnabled() && MotionBlurrClient.mc.currentScreen == null && world != null) {
-                MotionBlurrClient.mc.setScreen(new ClickGui_broken());
+                MotionBlurrClient.mc.setScreen(new ClickGui());
             }
-            else if (!clickGuiModule.isEnabled() && MotionBlurrClient.mc.currentScreen instanceof ClickGui_broken) {
+            else if (!clickGuiModule.isEnabled() && MotionBlurrClient.mc.currentScreen instanceof ClickGui) {
                 MotionBlurrClient.mc.setScreen(null);
             }
         }

@@ -1,6 +1,6 @@
 package cc.motionblurr.module.modules.client;
 
-import cc.motionblurr.gui2.ClickGui;
+import cc.motionblurr.gui.ClickGui;
 import cc.motionblurr.module.Category;
 import cc.motionblurr.module.Module;
 import org.lwjgl.glfw.GLFW;
