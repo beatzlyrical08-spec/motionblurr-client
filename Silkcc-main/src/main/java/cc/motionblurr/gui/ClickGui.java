@@ -50,12 +50,13 @@ public final class ClickGui extends Screen {
     private static final int GREEN = 0xFF55F6A8;
     private static final int RED = 0xFFFF5D86;
 
-    private static final int GUI_MARGIN = 22;
-    private static final int SIDEBAR_WIDTH = 158;
-    private static final int TOPBAR_HEIGHT = 58;
-    private static final int CARD_HEIGHT = 58;
-    private static final int SETTING_HEIGHT = 50;
-    private static final int GAP = 10;
+    private static final int GUI_MARGIN = 20;
+    private static final int SIDEBAR_WIDTH = 126;
+    private static final int TOPBAR_HEIGHT = 38;
+    private static final int BOTTOMBAR_HEIGHT = 30;
+    private static final int CARD_HEIGHT = 38;
+    private static final int SETTING_HEIGHT = 40;
+    private static final int GAP = 6;
 
     private final Map<Category, Float> categoryHoverAnimations = new EnumMap<>(Category.class);
     private final Map<Module, Float> moduleHoverAnimations = new HashMap<>();
@@ -69,7 +70,7 @@ public final class ClickGui extends Screen {
 
     private Category selectedCategory = Category.COMBAT;
     private ViewMode viewMode = ViewMode.CATEGORY;
-    private GuiSize guiSize = GuiSize.MEDIUM;
+    private GuiSize guiSize = GuiSize.SMALL;
     private AccentPreset accentPreset = AccentPreset.PURPLE;
     private Module selectedModule;
     private KeybindSetting listeningKeybind;
@@ -206,6 +207,7 @@ public final class ClickGui extends Screen {
             drawModulePanel(context, layout, mouseX, mouseY);
             drawSettingsPanel(context, layout, mouseX, mouseY);
         }
+        drawBottomBar(context, layout, mouseX, mouseY);
     }
 
     private void drawBackdrop(DrawContext context) {
@@ -222,20 +224,18 @@ public final class ClickGui extends Screen {
     }
 
     private void drawSidebar(DrawContext context, Layout layout, int mouseX, int mouseY) {
-        RenderUtils.drawRoundedRect(context, layout.sidebarX, layout.sidebarY, layout.sidebarW, layout.sidebarH, 16, GLASS_DARK);
-        drawGlowRect(context, layout.sidebarX + 12, layout.sidebarY + 15, 34, 34, 11, withAlpha(ACCENT, 42), 3);
-        RenderUtils.drawRoundedRect(context, layout.sidebarX + 14, layout.sidebarY + 17, 30, 30, 10, 0xFF1B1632);
-        context.drawText(textRenderer, "MB", layout.sidebarX + 23, layout.sidebarY + 28, ACCENT, false);
-        context.drawText(textRenderer, "MotionBlurr", layout.sidebarX + 54, layout.sidebarY + 20, TEXT, false);
-        context.drawText(textRenderer, "premium client", layout.sidebarX + 54, layout.sidebarY + 34, TEXT_DIM, false);
+        RenderUtils.drawRoundedRect(context, layout.sidebarX, layout.sidebarY, layout.sidebarW, layout.sidebarH, 12, GLASS_DARK);
+        context.fill(layout.sidebarX + layout.sidebarW - 1, layout.y + 1, layout.sidebarX + layout.sidebarW, layout.y + layout.h - 1, withAlpha(ACCENT, 42));
+        drawGlowRect(context, layout.sidebarX + 12, layout.sidebarY + 12, 24, 24, 8, withAlpha(ACCENT, 58), 3);
+        RenderUtils.drawRoundedRect(context, layout.sidebarX + 13, layout.sidebarY + 13, 22, 22, 7, 0xFF1B1632);
+        context.drawText(textRenderer, "MB", layout.sidebarX + 18, layout.sidebarY + 21, ACCENT, false);
+        context.drawText(textRenderer, "MOTIONBLURR", layout.sidebarX + 44, layout.sidebarY + 14, TEXT, false);
+        context.drawText(textRenderer, "rise above.", layout.sidebarX + 44, layout.sidebarY + 27, TEXT_MUTED, false);
 
-        int itemX = layout.sidebarX + 12;
-        int itemY = layout.sidebarY + 66;
-        int itemW = layout.sidebarW - 24;
-        int itemH = 30;
-
-        itemY = drawSidebarAction(context, "Favorites", viewMode == ViewMode.FAVORITES, itemX, itemY, itemW, itemH, mouseX, mouseY);
-        itemY += 3;
+        int itemX = layout.sidebarX + 8;
+        int itemY = layout.sidebarY + 50;
+        int itemW = layout.sidebarW - 16;
+        int itemH = 23;
 
         for (Category category : Category.values()) {
             boolean selected = viewMode == ViewMode.CATEGORY && category == selectedCategory;
@@ -247,90 +247,101 @@ public final class ClickGui extends Screen {
             int offset = Math.round(lerp(0, 4, easeOutCubic(hover)));
 
             if (hover > 0.01F) {
-                RenderUtils.drawRoundedRect(context, itemX, itemY, itemW, itemH, 9, withAlpha(0xFF252A42, (int) (90 * hover)));
+                RenderUtils.drawRoundedRect(context, itemX, itemY, itemW, itemH, 7, withAlpha(0xFF252A42, (int) (90 * hover)));
             }
             if (selected) {
-                drawGlowRect(context, itemX, itemY, itemW, itemH, 9, withAlpha(ACCENT, 58), 3);
-                RenderUtils.drawRoundedRect(context, itemX, itemY, itemW, itemH, 9, 0xDD33215B);
-                RenderUtils.drawRoundedRect(context, itemX + 3, itemY + 7, 3, itemH - 14, 2, ACCENT);
+                drawGlowRect(context, itemX, itemY, itemW, itemH, 7, withAlpha(ACCENT, 50), 2);
+                RenderUtils.drawRoundedRect(context, itemX, itemY, itemW, itemH, 7, 0xDD33215B);
+                RenderUtils.drawRoundedRect(context, itemX + 3, itemY + 6, 2, itemH - 12, 2, ACCENT);
             }
 
-            context.drawText(textRenderer, category.getName(), itemX + 14 + offset, itemY + 11,
+            context.drawText(textRenderer, iconForCategory(category), itemX + 10 + offset, itemY + 8,
+                    selected ? ACCENT : lerpColor(withAlpha(ACCENT, 165), TEXT_MUTED, hover * 0.2F), false);
+            context.drawText(textRenderer, category.getName(), itemX + 28 + offset, itemY + 8,
                     selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
-            itemY += itemH + 7;
+            itemY += itemH + 4;
         }
 
-        drawSidebarAction(context, "Friends", viewMode == ViewMode.FRIENDS, itemX, itemY + 2, itemW, itemH, mouseX, mouseY);
+        itemY += 2;
+        itemY = drawSidebarAction(context, "Favorites", "*", viewMode == ViewMode.FAVORITES, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        drawSidebarAction(context, "Friends", "+", viewMode == ViewMode.FRIENDS, itemX, itemY, itemW, itemH, mouseX, mouseY);
 
-        int infoY = layout.sidebarY + layout.sidebarH - 78;
-        RenderUtils.drawRoundedRect(context, layout.sidebarX + 12, infoY, layout.sidebarW - 24, 44, 12, 0xAA191D30);
-        RenderUtils.drawRoundedRect(context, layout.sidebarX + 22, infoY + 10, 24, 24, 8, 0xFF2A2145);
-        context.drawText(textRenderer, "S", layout.sidebarX + 31, infoY + 18, ACCENT, false);
-        context.drawText(textRenderer, "MotionBlurr", layout.sidebarX + 54, infoY + 10, TEXT_SOFT, false);
-        context.drawText(textRenderer, "local profile", layout.sidebarX + 54, infoY + 25, TEXT_DIM, false);
-        context.drawText(textRenderer, "v1.0", layout.sidebarX + 16, layout.sidebarY + layout.sidebarH - 20, TEXT_DIM, false);
+        if (layout.sidebarH > 330) {
+            int infoY = layout.sidebarY + layout.sidebarH - 66;
+            RenderUtils.drawRoundedRect(context, layout.sidebarX + 8, infoY, layout.sidebarW - 16, 42, 8, 0xAA191D30);
+            RenderUtils.drawRoundedRect(context, layout.sidebarX + 16, infoY + 10, 22, 22, 6, 0xFF2A2145);
+            context.drawText(textRenderer, "M", layout.sidebarX + 24, infoY + 18, ACCENT, false);
+            context.drawText(textRenderer, "MotionBlurr", layout.sidebarX + 46, infoY + 9, TEXT_SOFT, false);
+            context.drawText(textRenderer, "Premium", layout.sidebarX + 46, infoY + 23, ACCENT, false);
+        }
+        context.drawText(textRenderer, "v1.0.0", layout.sidebarX + 12, layout.sidebarY + layout.sidebarH - 16, TEXT_MUTED, false);
     }
 
-    private int drawSidebarAction(DrawContext context, String label, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
+    private int drawSidebarAction(DrawContext context, String label, String icon, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, h);
         float hover = animate(stringHoverAnimations, "nav:" + label, hovered ? 1.0F : 0.0F, 0.18F);
         int offset = Math.round(lerp(0, 4, easeOutCubic(hover)));
 
-        if (hover > 0.01F) {
-            RenderUtils.drawRoundedRect(context, x, y, w, h, 9, withAlpha(0xFF252A42, (int) (90 * hover)));
-        }
+        if (hover > 0.01F) RenderUtils.drawRoundedRect(context, x, y, w, h, 7, withAlpha(0xFF252A42, (int) (90 * hover)));
         if (selected) {
-            drawGlowRect(context, x, y, w, h, 9, withAlpha(ACCENT, 58), 3);
-            RenderUtils.drawRoundedRect(context, x, y, w, h, 9, 0xDD33215B);
-            RenderUtils.drawRoundedRect(context, x + 3, y + 7, 3, h - 14, 2, ACCENT);
+            drawGlowRect(context, x, y, w, h, 7, withAlpha(ACCENT, 50), 2);
+            RenderUtils.drawRoundedRect(context, x, y, w, h, 7, 0xDD33215B);
+            RenderUtils.drawRoundedRect(context, x + 3, y + 6, 2, h - 12, 2, ACCENT);
         }
 
-        context.drawText(textRenderer, label, x + 14 + offset, y + 11,
+        context.drawText(textRenderer, icon, x + 10 + offset, y + 8, selected ? ACCENT : TEXT_MUTED, false);
+        context.drawText(textRenderer, label, x + 28 + offset, y + 8,
                 selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
-        return y + h + 7;
+        return y + h + 4;
     }
 
     private void drawTopBar(DrawContext context, Layout layout, int mouseX, int mouseY) {
-        RenderUtils.drawRoundedRect(context, layout.topX, layout.topY, layout.topW, layout.topH, 15, GLASS);
+        RenderUtils.drawRoundedRect(context, layout.topX, layout.topY, layout.topW, layout.topH, 10, 0x66101424);
 
-        int searchX = layout.topX + 14;
-        int searchY = layout.topY + 13;
-        int searchW = Math.max(145, layout.topW - 128);
-        int searchH = 32;
+        int searchX = layout.topX + 8;
+        int searchY = layout.topY + 6;
+        int searchW = Math.min(190, Math.max(130, layout.moduleW - 12));
+        int searchH = 26;
         float hover = isHovered(mouseX, mouseY, searchX, searchY, searchW, searchH) ? 1.0F : 0.0F;
         int searchBorder = withAlpha(ACCENT, (int) (45 + 115 * searchFocusAnimation + 35 * hover));
         drawGlowRect(context, searchX, searchY, searchW, searchH, 10, withAlpha(ACCENT, (int) (16 + 30 * searchFocusAnimation)), 2);
-        RenderUtils.drawRoundedRect(context, searchX, searchY, searchW, searchH, 10, 0xAA0F1220);
-        RenderUtils.drawRoundedRect(context, searchX, searchY, searchW, 1, 1, searchBorder);
-        context.drawText(textRenderer, "Search modules...", searchX + 14, searchY + 12, searchText.isEmpty() ? TEXT_DIM : 0x00000000, false);
+        RenderUtils.drawRoundedRect(context, searchX, searchY, searchW, searchH, 8, 0xAA0F1220);
+        drawBorder(context, searchX, searchY, searchW, searchH, 8, searchBorder);
+        context.drawText(textRenderer, "Search modules...", searchX + 9, searchY + 9, searchText.isEmpty() ? TEXT_DIM : 0x00000000, false);
         if (!searchText.isEmpty()) {
-            context.drawText(textRenderer, trimToWidth(searchText, searchW - 28), searchX + 14, searchY + 12, TEXT_SOFT, false);
+            context.drawText(textRenderer, trimToWidth(searchText, searchW - 34), searchX + 9, searchY + 9, TEXT_SOFT, false);
         }
+        context.drawText(textRenderer, "?", searchX + searchW - 18, searchY + 9, TEXT_MUTED, false);
 
-        int buttonX = layout.topX + layout.topW - 92;
-        drawTopDot(context, buttonX, layout.topY + 23, 0xFFFF5F76);
-        drawTopDot(context, buttonX + 28, layout.topY + 23, 0xFFFFC75F);
-        drawTopDot(context, buttonX + 56, layout.topY + 23, ACCENT);
+        int y = layout.topY + 7;
+        int x = layout.topX + layout.topW - 108;
+        drawTopIconButton(context, "H", x, y, false, mouseX, mouseY);
+        drawTopIconButton(context, "S", x + 26, y, false, mouseX, mouseY);
+        drawTopIconButton(context, "-", x + 56, y, false, mouseX, mouseY);
+        drawTopIconButton(context, "X", x + 82, y, true, mouseX, mouseY);
     }
 
-    private void drawTopDot(DrawContext context, int x, int y, int color) {
-        drawGlowRect(context, x - 5, y - 5, 10, 10, 5, withAlpha(color, 45), 2);
-        RenderUtils.drawRoundedRect(context, x - 4, y - 4, 8, 8, 4, color);
+    private void drawTopIconButton(DrawContext context, String label, int x, int y, boolean accent, int mouseX, int mouseY) {
+        boolean hovered = isHovered(mouseX, mouseY, x, y, 22, 22);
+        float hover = animate(stringHoverAnimations, "top:" + label, hovered ? 1.0F : 0.0F, 0.18F);
+        RenderUtils.drawRoundedRect(context, x, y, 22, 22, 7, lerpColor(0x44111523, 0xAA1F2436, hover));
+        context.drawText(textRenderer, label, x + (22 - textRenderer.getWidth(label)) / 2, y + 7,
+                accent ? lerpColor(ACCENT, TEXT, hover) : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
     }
 
     private void drawModulePanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
         drawSoftPanel(context, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH, 15);
         String title = viewMode == ViewMode.FAVORITES ? "Favorites" : selectedCategory.getName();
-        context.drawText(textRenderer, title, layout.moduleX + 16, layout.moduleY + 15, TEXT, false);
+        context.drawText(textRenderer, title, layout.moduleX + 10, layout.moduleY + 10, TEXT, false);
 
         List<Module> modules = getFilteredModules();
         String count = modules.size() + " modules";
-        context.drawText(textRenderer, count, layout.moduleX + layout.moduleW - textRenderer.getWidth(count) - 16, layout.moduleY + 15, TEXT_DIM, false);
+        context.drawText(textRenderer, count, layout.moduleX + layout.moduleW - textRenderer.getWidth(count) - 10, layout.moduleY + 10, TEXT_DIM, false);
 
-        int listX = layout.moduleX + 12;
-        int listY = layout.moduleY + 42;
-        int listW = layout.moduleW - 24;
-        int listH = layout.moduleH - 54;
+        int listX = layout.moduleX + 8;
+        int listY = layout.moduleY + 30;
+        int listW = layout.moduleW - 16;
+        int listH = layout.moduleH - 38;
         context.enableScissor(listX - 4, listY, listX + listW + 4, listY + listH);
 
         double currentY = listY - moduleScroll;
@@ -366,23 +377,26 @@ public final class ClickGui extends Screen {
             drawGlowRect(context, x, drawY, w, CARD_HEIGHT, 12, withAlpha(ACCENT, glowAlpha), 4);
         }
 
-        RenderUtils.drawRoundedRect(context, x, drawY, w, CARD_HEIGHT, 12, bg);
+        RenderUtils.drawRoundedRect(context, x, drawY, w, CARD_HEIGHT, 9, bg);
         if (selected > 0.01F) {
-            drawBorder(context, x, drawY, w, CARD_HEIGHT, 12, withAlpha(ACCENT, (int) (210 * selected)));
+            drawBorder(context, x, drawY, w, CARD_HEIGHT, 9, withAlpha(ACCENT, (int) (210 * selected)));
         } else if (hover > 0.01F) {
-            drawBorder(context, x, drawY, w, CARD_HEIGHT, 12, withAlpha(ACCENT, (int) (75 * hover)));
+            drawBorder(context, x, drawY, w, CARD_HEIGHT, 9, withAlpha(ACCENT, (int) (75 * hover)));
         }
 
-        context.drawText(textRenderer, module.getDisplayName(), x + 14, drawY + 11,
+        drawModuleIcon(context, module, x + 8, drawY + 7, 24);
+        context.drawText(textRenderer, trimToWidth(module.getDisplayName(), w - 104), x + 38, drawY + 7,
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
         String description = module.getDescription() == null ? "" : module.getDescription();
-        context.drawText(textRenderer, trimToWidth(description, w - 92), x + 14, drawY + 29, TEXT_MUTED, false);
+        if (w > 185) {
+            context.drawText(textRenderer, trimToWidth(description, w - 122), x + 38, drawY + 21, TEXT_MUTED, false);
+        }
 
         boolean favorite = favorites.contains(module);
         float fav = animate(stringHoverAnimations, "fav:" + module.getName(), favorite ? 1.0F : 0.0F, 0.18F);
-        context.drawText(textRenderer, favorite ? "*" : "+", x + w - 68, drawY + 12,
+        drawToggle(context, x + w - 58, drawY + 13, toggle, false);
+        context.drawText(textRenderer, favorite ? "*" : "+", x + w - 18, drawY + 14,
                 lerpColor(TEXT_DIM, ACCENT, Math.max(fav, module == selectedModule ? 0.7F : 0.0F)), false);
-        drawToggle(context, x + w - 48, drawY + 21, toggle, false);
     }
 
     private void drawSettingsPanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
@@ -390,24 +404,25 @@ public final class ClickGui extends Screen {
         Module module = selectedModule;
 
         if (module == null) {
-            context.drawText(textRenderer, "Select a module", layout.settingsX + 16, layout.settingsY + 18, TEXT, false);
-            context.drawText(textRenderer, "Settings will appear here.", layout.settingsX + 16, layout.settingsY + 36, TEXT_MUTED, false);
+            context.drawText(textRenderer, "Select a module", layout.settingsX + 10, layout.settingsY + 12, TEXT, false);
+            context.drawText(textRenderer, "Settings will appear here.", layout.settingsX + 10, layout.settingsY + 28, TEXT_MUTED, false);
             return;
         }
 
         float selected = moduleSelectAnimations.getOrDefault(module, 1.0F);
-        drawGlowRect(context, layout.settingsX + 16, layout.settingsY + 18, 38, 38, 13, withAlpha(ACCENT, (int) (42 + 35 * selected)), 3);
-        RenderUtils.drawRoundedRect(context, layout.settingsX + 18, layout.settingsY + 20, 34, 34, 12, 0xFF241B3F);
-        context.drawText(textRenderer, module.getDisplayName().substring(0, 1).toUpperCase(Locale.ROOT), layout.settingsX + 31, layout.settingsY + 32, ACCENT, false);
+        drawGlowRect(context, layout.settingsX + 10, layout.settingsY + 10, 28, 28, 9, withAlpha(ACCENT, (int) (42 + 35 * selected)), 2);
+        drawModuleIcon(context, module, layout.settingsX + 12, layout.settingsY + 12, 24);
 
-        context.drawText(textRenderer, module.getDisplayName(), layout.settingsX + 64, layout.settingsY + 18, TEXT, false);
-        context.drawText(textRenderer, trimToWidth(module.getDescription(), layout.settingsW - 132), layout.settingsX + 64, layout.settingsY + 35, TEXT_MUTED, false);
-        drawToggle(context, layout.settingsX + layout.settingsW - 54, layout.settingsY + 28,
+        context.drawText(textRenderer, trimToWidth(module.getDisplayName(), layout.settingsW - 92), layout.settingsX + 44, layout.settingsY + 11, TEXT, false);
+        context.drawText(textRenderer, trimToWidth(module.getDescription(), layout.settingsW - 96), layout.settingsX + 44, layout.settingsY + 26, TEXT_MUTED, false);
+        drawToggle(context, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18,
                 moduleToggleAnimations.getOrDefault(module, module.isEnabled() ? 1.0F : 0.0F), true);
 
-        int listX = layout.settingsX + 12;
-        int listY = layout.settingsY + 72;
-        int listW = layout.settingsW - 24;
+        drawSettingsTabs(context, layout);
+
+        int listX = layout.settingsX + 8;
+        int listY = layout.settingsY + 76;
+        int listW = layout.settingsW - 16;
         int listH = layout.settingsH - 84;
         context.enableScissor(listX - 2, listY, listX + listW + 2, listY + listH);
 
@@ -432,16 +447,16 @@ public final class ClickGui extends Screen {
     private void drawSettingRow(DrawContext context, Module module, Setting setting, int x, int y, int w, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, SETTING_HEIGHT);
         float hover = animate(settingHoverAnimations, setting, hovered ? 1.0F : 0.0F, 0.16F);
-        RenderUtils.drawRoundedRect(context, x, y, w, SETTING_HEIGHT, 12, lerpColor(ROW, ROW_HOVER, hover));
+        RenderUtils.drawRoundedRect(context, x, y, w, SETTING_HEIGHT, 8, lerpColor(ROW, ROW_HOVER, hover));
         if (hover > 0.01F) {
-            drawBorder(context, x, y, w, SETTING_HEIGHT, 12, withAlpha(ACCENT, (int) (55 * hover)));
+            drawBorder(context, x, y, w, SETTING_HEIGHT, 8, withAlpha(ACCENT, (int) (55 * hover)));
         }
 
-        context.drawText(textRenderer, setting.getName(), x + 12, y + 11, TEXT_SOFT, false);
+        context.drawText(textRenderer, trimToWidth(setting.getName(), w - 76), x + 8, y + 7, TEXT_SOFT, false);
 
         if (setting instanceof BooleanSetting booleanSetting) {
             float progress = animate(settingToggleAnimations, setting, booleanSetting.getValue() ? 1.0F : 0.0F, 0.17F);
-            drawToggle(context, x + w - 50, y + 17, progress, false);
+            drawToggle(context, x + w - 36, y + 13, progress, false);
         } else if (setting instanceof ModeSetting modeSetting) {
             drawModeSetting(context, modeSetting, x, y, w);
         } else if (setting instanceof NumberSetting numberSetting) {
@@ -451,52 +466,52 @@ public final class ClickGui extends Screen {
         } else if (setting instanceof ColorSetting colorSetting) {
             drawColorSetting(context, colorSetting, x, y, w);
         } else if (setting instanceof RangeSetting rangeSetting) {
-            drawRightText(context, format(rangeSetting.getMinValue()) + " - " + format(rangeSetting.getMaxValue()), x, y + 11, w - 12, TEXT_MUTED);
+            drawRightText(context, format(rangeSetting.getMinValue()) + " - " + format(rangeSetting.getMaxValue()), x, y + 7, w - 8, TEXT_MUTED);
         } else if (setting instanceof StringSetting stringSetting) {
-            drawRightText(context, trimToWidth(stringSetting.getValue(), 92), x, y + 11, w - 12, TEXT_MUTED);
+            drawRightText(context, trimToWidth(stringSetting.getValue(), 70), x, y + 7, w - 8, TEXT_MUTED);
         }
     }
 
     private void drawModeSetting(DrawContext context, ModeSetting setting, int x, int y, int w) {
         String mode = trimToWidth(setting.getMode(), 92);
-        int boxW = Math.max(58, textRenderer.getWidth(mode) + 22);
-        int boxX = x + w - boxW - 10;
-        RenderUtils.drawRoundedRect(context, boxX, y + 12, boxW, 24, 8, 0xCC111522);
-        drawBorder(context, boxX, y + 12, boxW, 24, 8, 0x558B5CFF);
-        context.drawText(textRenderer, mode, boxX + 11, y + 20, TEXT_MUTED, false);
+        int boxW = Math.min(76, Math.max(48, textRenderer.getWidth(mode) + 16));
+        int boxX = x + w - boxW - 8;
+        RenderUtils.drawRoundedRect(context, boxX, y + 8, boxW, 22, 7, 0xCC111522);
+        drawBorder(context, boxX, y + 8, boxW, 22, 7, 0x558B5CFF);
+        context.drawText(textRenderer, trimToWidth(mode, boxW - 12), boxX + 8, y + 15, TEXT_MUTED, false);
     }
 
     private void drawNumberSetting(DrawContext context, NumberSetting setting, Setting key, int x, int y, int w) {
         float target = (float) ((setting.getValue() - setting.getMin()) / Math.max(0.0001D, setting.getMax() - setting.getMin()));
         float progress = animate(sliderAnimations, key, clamp(target, 0.0F, 1.0F), 0.18F);
-        int barW = Math.max(70, w - 118);
-        int barX = x + 12;
-        int barY = y + 34;
+        int barW = Math.max(48, w - 88);
+        int barX = x + 8;
+        int barY = y + 28;
         context.fill(barX, barY, barX + barW, barY + 3, 0xFF30354A);
         context.fill(barX, barY, barX + Math.round(barW * easeOutCubic(progress)), barY + 3, ACCENT);
         RenderUtils.drawRoundedRect(context, barX + Math.round(barW * easeOutCubic(progress)) - 3, barY - 3, 8, 8, 4, ACCENT);
-        RenderUtils.drawRoundedRect(context, x + w - 58, y + 13, 46, 22, 7, 0xCC111522);
-        drawRightText(context, format(setting.getValue()), x, y + 20, w - 22, TEXT_MUTED);
+        RenderUtils.drawRoundedRect(context, x + w - 48, y + 9, 40, 20, 7, 0xCC111522);
+        drawRightText(context, format(setting.getValue()), x, y + 15, w - 18, TEXT_MUTED);
     }
 
     private void drawKeybindSetting(DrawContext context, KeybindSetting setting, int x, int y, int w) {
         String key = setting == listeningKeybind ? "..." : KeyUtils.getKey(setting.getKeyCode());
-        int boxW = Math.max(58, textRenderer.getWidth(key) + 20);
-        int boxX = x + w - boxW - 10;
-        RenderUtils.drawRoundedRect(context, boxX, y + 12, boxW, 24, 12, setting == listeningKeybind ? 0xDD352160 : 0xCC111522);
-        drawBorder(context, boxX, y + 12, boxW, 24, 12, setting == listeningKeybind ? ACCENT : 0x558B5CFF);
-        context.drawText(textRenderer, key, boxX + 10, y + 20, setting == listeningKeybind ? TEXT : TEXT_MUTED, false);
+        int boxW = Math.min(76, Math.max(46, textRenderer.getWidth(key) + 16));
+        int boxX = x + w - boxW - 8;
+        RenderUtils.drawRoundedRect(context, boxX, y + 8, boxW, 22, 10, setting == listeningKeybind ? 0xDD352160 : 0xCC111522);
+        drawBorder(context, boxX, y + 8, boxW, 22, 10, setting == listeningKeybind ? ACCENT : 0x558B5CFF);
+        context.drawText(textRenderer, trimToWidth(key, boxW - 12), boxX + 8, y + 15, setting == listeningKeybind ? TEXT : TEXT_MUTED, false);
     }
 
     private void drawColorSetting(DrawContext context, ColorSetting setting, int x, int y, int w) {
-        int swatchX = x + w - 42;
-        RenderUtils.drawRoundedRect(context, swatchX, y + 13, 28, 22, 8, setting.getRGB());
-        drawBorder(context, swatchX, y + 13, 28, 22, 8, 0x88FFFFFF);
+        int swatchX = x + w - 32;
+        RenderUtils.drawRoundedRect(context, swatchX, y + 9, 22, 20, 7, setting.getRGB());
+        drawBorder(context, swatchX, y + 9, 22, 20, 7, 0x88FFFFFF);
     }
 
     private void drawToggle(DrawContext context, int x, int y, float progress, boolean large) {
-        int toggleW = large ? 42 : 38;
-        int toggleH = large ? 18 : 16;
+        int toggleW = large ? 32 : 28;
+        int toggleH = large ? 15 : 13;
         int knob = toggleH - 4;
         float eased = easeOutCubic(progress);
         int bg = lerpColor(0xFF303548, ACCENT, eased);
@@ -593,6 +608,70 @@ public final class ClickGui extends Screen {
         context.drawText(textRenderer, "in memory for GUI use.", layout.settingsX + 16, layout.settingsY + 76, TEXT_MUTED, false);
     }
 
+    private void drawSettingsTabs(DrawContext context, Layout layout) {
+        String[] tabs = {"General", "Targets", "Weapon", "Rotation", "Render"};
+        int x = layout.settingsX + 10;
+        int y = layout.settingsY + 52;
+        int maxRight = layout.settingsX + layout.settingsW - 10;
+        context.fill(layout.settingsX, y - 10, layout.settingsX + layout.settingsW, y - 9, 0x3330354A);
+        for (int i = 0; i < tabs.length; i++) {
+            String tab = tabs[i];
+            int tabW = Math.max(38, textRenderer.getWidth(tab) + 10);
+            if (x + tabW > maxRight) break;
+            boolean active = i == 0;
+            float hover = animate(stringHoverAnimations, "tab:" + tab, active ? 1.0F : 0.0F, 0.18F);
+            context.drawText(textRenderer, tab, x + 3, y, active ? ACCENT : TEXT_MUTED, false);
+            if (hover > 0.01F) {
+                RenderUtils.drawRoundedRect(context, x, y + 14, tabW, 2, 1, withAlpha(ACCENT, (int) (205 * hover)));
+            }
+            x += tabW + 5;
+        }
+    }
+
+    private void drawBottomBar(DrawContext context, Layout layout, int mouseX, int mouseY) {
+        int y = layout.y + layout.h - BOTTOMBAR_HEIGHT;
+        context.fill(layout.x + 1, y, layout.x + layout.w - 1, y + 1, 0x33464C65);
+        int x = layout.moduleX;
+        drawBottomTab(context, "GUI", "[]", x, y + 5, 58, true, mouseX, mouseY);
+        drawBottomTab(context, "ArrayList", "=", x + 64, y + 5, 82, false, mouseX, mouseY);
+        drawBottomTab(context, "HUD", "O", x + 152, y + 5, 58, false, mouseX, mouseY);
+
+        int pillW = 82;
+        int pillX = layout.x + layout.w - pillW - 10;
+        RenderUtils.drawRoundedRect(context, pillX, y + 5, pillW, 22, 8, 0xAA111522);
+        drawBorder(context, pillX, y + 5, pillW, 22, 8, withAlpha(ACCENT, 40));
+        context.drawText(textRenderer, "Dark", pillX + 10, y + 12, TEXT_SOFT, false);
+        drawToggle(context, pillX + pillW - 34, y + 10, 1.0F, false);
+    }
+
+    private void drawBottomTab(DrawContext context, String label, String icon, int x, int y, int w, boolean active, int mouseX, int mouseY) {
+        boolean hovered = isHovered(mouseX, mouseY, x, y, w, 20);
+        float hover = animate(stringHoverAnimations, "bottom:" + label, hovered || active ? 1.0F : 0.0F, 0.18F);
+        RenderUtils.drawRoundedRect(context, x, y, w, 20, 7, active ? 0xDD241A43 : lerpColor(0x88111523, 0xAA1C2132, hover));
+        drawBorder(context, x, y, w, 20, 7, withAlpha(ACCENT, active ? 180 : (int) (55 * hover)));
+        context.drawText(textRenderer, icon, x + 8, y + 6, active ? ACCENT : TEXT_MUTED, false);
+        context.drawText(textRenderer, trimToWidth(label, w - 26), x + 24, y + 6, active ? TEXT : TEXT_SOFT, false);
+    }
+
+    private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size) {
+        drawGlowRect(context, x, y, size, size, 10, withAlpha(ACCENT, 30), 2);
+        RenderUtils.drawRoundedRect(context, x, y, size, size, 10, 0x661D1534);
+        String icon = module.getDisplayName().isEmpty() ? "M" : module.getDisplayName().substring(0, 1).toUpperCase(Locale.ROOT);
+        context.drawText(textRenderer, icon, x + (size - textRenderer.getWidth(icon)) / 2, y + size / 2 - 4, ACCENT, false);
+    }
+
+    private String iconForCategory(Category category) {
+        return switch (category) {
+            case COMBAT -> "X";
+            case MOVEMENT -> ">";
+            case PLAYER -> "P";
+            case RENDER -> "R";
+            case MISC -> "?";
+            case CLIENT -> "C";
+            case CONFIG -> "S";
+        };
+    }
+
     private void drawInput(DrawContext context, int x, int y, int w, int h, String value, String placeholder, boolean focused) {
         drawGlowRect(context, x, y, w, h, 9, withAlpha(ACCENT, focused ? 42 : 12), 2);
         RenderUtils.drawRoundedRect(context, x, y, w, h, 9, 0xAA0F1220);
@@ -621,6 +700,12 @@ public final class ClickGui extends Screen {
         if (listeningKeybind != null) {
             listeningKeybind.setKeyCode(-100 - button);
             stopListening();
+            return true;
+        }
+
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
+                && isHovered(mouseX, mouseY, layout.topX + layout.topW - 26, layout.topY + 7, 22, 22)) {
+            close();
             return true;
         }
 
@@ -678,20 +763,10 @@ public final class ClickGui extends Screen {
     }
 
     private boolean handleCategoryClick(double mouseX, double mouseY, Layout layout) {
-        int itemX = layout.sidebarX + 12;
-        int itemY = layout.sidebarY + 66;
-        int itemW = layout.sidebarW - 24;
-        int itemH = 30;
-
-        if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
-            viewMode = ViewMode.FAVORITES;
-            selectedModule = null;
-            moduleScroll = 0;
-            settingsScroll = 0;
-            stopListening();
-            return true;
-        }
-        itemY += itemH + 10;
+        int itemX = layout.sidebarX + 8;
+        int itemY = layout.sidebarY + 50;
+        int itemW = layout.sidebarW - 16;
+        int itemH = 23;
 
         for (Category category : Category.values()) {
             if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
@@ -708,10 +783,21 @@ public final class ClickGui extends Screen {
                 stopListening();
                 return true;
             }
-            itemY += itemH + 7;
+            itemY += itemH + 4;
         }
 
-        if (isHovered(mouseX, mouseY, itemX, itemY + 2, itemW, itemH)) {
+        itemY += 2;
+        if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
+            viewMode = ViewMode.FAVORITES;
+            selectedModule = null;
+            moduleScroll = 0;
+            settingsScroll = 0;
+            stopListening();
+            return true;
+        }
+        itemY += itemH + 4;
+
+        if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
             viewMode = ViewMode.FRIENDS;
             selectedModule = null;
             moduleScroll = 0;
@@ -810,9 +896,9 @@ public final class ClickGui extends Screen {
     }
 
     private Module findModuleAt(double mouseX, double mouseY, Layout layout) {
-        int listX = layout.moduleX + 12;
-        int listY = layout.moduleY + 42;
-        int listW = layout.moduleW - 24;
+        int listX = layout.moduleX + 8;
+        int listY = layout.moduleY + 30;
+        int listW = layout.moduleW - 16;
         double currentY = listY - moduleScroll;
 
         for (Module module : getFilteredModules()) {
@@ -825,14 +911,14 @@ public final class ClickGui extends Screen {
     }
 
     private boolean isModuleToggleHovered(double mouseX, double mouseY, Module module, Layout layout) {
-        int listX = layout.moduleX + 12;
-        int listY = layout.moduleY + 42;
-        int listW = layout.moduleW - 24;
+        int listX = layout.moduleX + 8;
+        int listY = layout.moduleY + 30;
+        int listW = layout.moduleW - 16;
         double currentY = listY - moduleScroll;
 
         for (Module current : getFilteredModules()) {
             if (current == module) {
-                return isHovered(mouseX, mouseY, listX + listW - 54, currentY + 15, 50, 30);
+                return isHovered(mouseX, mouseY, listX + listW - 62, currentY + 8, 38, 24);
             }
             currentY += CARD_HEIGHT + GAP;
         }
@@ -840,14 +926,14 @@ public final class ClickGui extends Screen {
     }
 
     private boolean isModuleFavoriteHovered(double mouseX, double mouseY, Module module, Layout layout) {
-        int listX = layout.moduleX + 12;
-        int listY = layout.moduleY + 42;
-        int listW = layout.moduleW - 24;
+        int listX = layout.moduleX + 8;
+        int listY = layout.moduleY + 30;
+        int listW = layout.moduleW - 16;
         double currentY = listY - moduleScroll;
 
         for (Module current : getFilteredModules()) {
             if (current == module) {
-                return isHovered(mouseX, mouseY, listX + listW - 76, currentY + 6, 28, 28);
+                return isHovered(mouseX, mouseY, listX + listW - 24, currentY + 6, 22, 24);
             }
             currentY += CARD_HEIGHT + GAP;
         }
@@ -859,9 +945,9 @@ public final class ClickGui extends Screen {
             return null;
         }
 
-        int listX = layout.settingsX + 12;
-        int listY = layout.settingsY + 72;
-        int listW = layout.settingsW - 24;
+        int listX = layout.settingsX + 8;
+        int listY = layout.settingsY + 76;
+        int listW = layout.settingsW - 16;
         int listH = layout.settingsH - 84;
         if (!isHovered(mouseX, mouseY, listX, listY, listW, listH)) {
             return null;
@@ -878,13 +964,13 @@ public final class ClickGui extends Screen {
     }
 
     private void drawModuleScrollBar(DrawContext context, Layout layout, int moduleCount) {
-        int listH = layout.moduleH - 54;
+        int listH = layout.moduleH - 38;
         int contentH = Math.max(0, moduleCount * (CARD_HEIGHT + GAP) - GAP);
         int max = Math.max(0, contentH - listH);
         if (max <= 0) return;
 
         int trackX = layout.moduleX + layout.moduleW - 8;
-        int trackY = layout.moduleY + 42;
+        int trackY = layout.moduleY + 30;
         int thumbH = Math.max(24, (int) (listH * (listH / (double) contentH)));
         int thumbY = trackY + (int) ((listH - thumbH) * (moduleScroll / max));
         RenderUtils.drawRoundedRect(context, trackX, trackY, 3, listH, 2, 0x5530354A);
@@ -931,45 +1017,49 @@ public final class ClickGui extends Screen {
     private void clampScrolls() {
         Layout layout = getLayout();
         int moduleContent = Math.max(0, getFilteredModules().size() * (CARD_HEIGHT + GAP) - GAP);
-        moduleScroll = clamp(moduleScroll, 0.0D, Math.max(0, moduleContent - (layout.moduleH - 54)));
+        moduleScroll = clamp(moduleScroll, 0.0D, Math.max(0, moduleContent - (layout.moduleH - 38)));
 
         int settingContent = selectedModule == null ? 0 : Math.max(0, selectedModule.getSettings().size() * (SETTING_HEIGHT + 8) - 8);
         settingsScroll = clamp(settingsScroll, 0.0D, Math.max(0, settingContent - (layout.settingsH - 84)));
     }
 
     private Layout getLayout() {
-        int targetW = guiSize == GuiSize.SMALL ? 760 : guiSize == GuiSize.LARGE ? 1040 : 900;
-        int targetH = guiSize == GuiSize.SMALL ? 430 : guiSize == GuiSize.LARGE ? 610 : 520;
-        int guiW = Math.min(targetW, Math.max(320, width - GUI_MARGIN));
-        int guiH = Math.min(targetH, Math.max(260, height - GUI_MARGIN));
+        int targetW = guiSize == GuiSize.SMALL ? 590 : guiSize == GuiSize.LARGE ? 760 : 670;
+        int targetH = guiSize == GuiSize.SMALL ? 330 : guiSize == GuiSize.LARGE ? 440 : 380;
+        int maxW = Math.max(1, width - 20);
+        int maxH = Math.max(1, height - 20);
+        int guiW = Math.min(targetW, maxW);
+        int guiH = Math.min(targetH, maxH);
+        if (maxW >= 320) guiW = Math.max(320, guiW);
+        if (maxH >= 240) guiH = Math.max(240, guiH);
         int x = (width - guiW) / 2;
         int y = (height - guiH) / 2;
 
-        int sidebarW = guiW < 660 ? 124 : Math.min(SIDEBAR_WIDTH, Math.max(132, guiW / 5));
-        int gap = 10;
+        int sidebarW = Math.min(SIDEBAR_WIDTH, Math.max(115, guiW / 5));
+        int gap = GAP;
         int contentX = x + sidebarW + gap;
-        int contentW = guiW - sidebarW - gap - 12;
+        int contentW = guiW - sidebarW - gap - 10;
         int topX = contentX;
-        int topY = y + 12;
+        int topY = y + 8;
         int topW = contentW;
         int topH = TOPBAR_HEIGHT;
 
         int bodyY = topY + topH + gap;
-        int bodyH = guiH - TOPBAR_HEIGHT - gap - 24;
-        int settingsW = Math.max(170, Math.min(286, (int) (contentW * 0.38F)));
+        int bodyH = guiH - TOPBAR_HEIGHT - BOTTOMBAR_HEIGHT - gap - 18;
+        int settingsW = Math.max(170, Math.min(210, (int) (contentW * 0.45F)));
         int moduleW = contentW - settingsW - gap;
-        if (moduleW < 180) {
-            settingsW = Math.max(150, contentW - gap - 180);
-            moduleW = Math.max(130, contentW - settingsW - gap);
+        if (moduleW < 160) {
+            settingsW = Math.max(165, contentW - gap - 160);
+            moduleW = Math.max(145, contentW - settingsW - gap);
         }
         int settingsX = contentX + moduleW + gap;
 
-        int searchX = topX + 14;
-        int searchY = topY + 13;
-        int searchW = Math.max(145, topW - 128);
-        int searchH = 32;
+        int searchX = topX + 8;
+        int searchY = topY + 6;
+        int searchW = Math.min(190, Math.max(130, moduleW - 12));
+        int searchH = 26;
 
-        return new Layout(x, y, guiW, guiH, x + 8, y + 12, sidebarW - 4, guiH - 24,
+        return new Layout(x, y, guiW, guiH, x + 6, y + 8, sidebarW - 4, guiH - 16,
                 topX, topY, topW, topH, contentX, bodyY, moduleW, bodyH,
                 settingsX, bodyY, settingsW, bodyH, searchX, searchY, searchW, searchH);
     }
