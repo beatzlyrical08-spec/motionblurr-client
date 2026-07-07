@@ -10,16 +10,16 @@ import java.awt.Color;
 public class NewClickGUIModule extends Module {
 
     public NewClickGUIModule() {
-        super("NewClickGUI", "Modern NanoVG-based ClickGUI", GLFW.GLFW_KEY_RIGHT_SHIFT, Category.CLIENT);
+        super("NewClickGUI", "Opens the MotionBlurr ClickGUI", GLFW.GLFW_KEY_RIGHT_SHIFT, Category.CLIENT);
     }
 
-@Override
-public void onEnable() {
-    if (mc.currentScreen == null) {
-        mc.setScreen(new ClickGui());
+    @Override
+    public void onEnable() {
+        if (mc.currentScreen == null) {
+            mc.setScreen(new ClickGui());
+        }
+        setEnabled(false);
     }
-    setEnabled(false);
-}
 
     public static Color getAccentColor() {
         return ClientSettingsModule.getAccentColor();
@@ -29,4 +29,3 @@ public void onEnable() {
         return ClientSettingsModule.getFontStyle();
     }
 }
-
