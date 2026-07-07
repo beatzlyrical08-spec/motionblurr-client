@@ -1,6 +1,6 @@
 package cc.motionblurr.module.modules.client;
 
-import cc.motionblurr.gui.ClickGui_broken;
+import cc.motionblurr.gui2.ClickGui;
 import cc.motionblurr.module.Category;
 import cc.motionblurr.module.Module;
 import org.lwjgl.glfw.GLFW;
@@ -13,13 +13,13 @@ public class NewClickGUIModule extends Module {
         super("NewClickGUI", "Modern NanoVG-based ClickGUI", GLFW.GLFW_KEY_RIGHT_SHIFT, Category.CLIENT);
     }
 
-    @Override
-    public void onEnable() {
-        if (mc.currentScreen == null) {
-            mc.setScreen(new ClickGui_broken());
-        }
-        setEnabled(false);
+@Override
+public void onEnable() {
+    if (mc.currentScreen == null) {
+        mc.setScreen(new ClickGui());
     }
+    setEnabled(false);
+}
 
     public static Color getAccentColor() {
         return ClientSettingsModule.getAccentColor();
