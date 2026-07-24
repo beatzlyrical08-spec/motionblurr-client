@@ -258,8 +258,7 @@ public final class ClickGui extends Screen {
                 RenderUtils.drawRoundedRect(context, itemX + 3, itemY + 6, 2, itemH - 12, 2, ACCENT);
             }
 
-            drawText(context, iconForCategory(category), itemX + 10 + offset, itemY + 8,
-                    selected ? ACCENT : lerpColor(withAlpha(ACCENT, 165), TEXT_MUTED, hover * 0.2F), false);
+            drawCategoryMark(context, itemX + 12 + offset, itemY + 8, selected, hover);
             drawText(context, category.getName(), itemX + 28 + offset, itemY + 8,
                     selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
             itemY += itemH + 4;
@@ -292,7 +291,8 @@ public final class ClickGui extends Screen {
             RenderUtils.drawRoundedRect(context, x + 3, y + 6, 2, h - 12, 2, ACCENT);
         }
 
-        drawText(context, icon, x + 10 + offset, y + 8, selected ? ACCENT : TEXT_MUTED, false);
+        RenderUtils.drawRoundedRect(context, x + 13 + offset, y + 9, 7, 7, 4,
+                selected ? ACCENT : lerpColor(TEXT_DIM, TEXT_MUTED, hover));
         drawText(context, label, x + 28 + offset, y + 8,
                 selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
         return y + h + 4;
@@ -398,8 +398,8 @@ public final class ClickGui extends Screen {
         boolean favorite = favorites.contains(module);
         float fav = animate(stringHoverAnimations, "fav:" + module.getName(), favorite ? 1.0F : 0.0F, 0.18F);
         drawToggle(context, x + w - 58, drawY + 13, toggle, false);
-        drawText(context, favorite ? "*" : "+", x + w - 18, drawY + 14,
-                lerpColor(TEXT_DIM, ACCENT, Math.max(fav, module == selectedModule ? 0.7F : 0.0F)), false);
+        RenderUtils.drawRoundedRect(context, x + w - 17, drawY + 16, 7, 7, favorite ? 4 : 2,
+                lerpColor(TEXT_DIM, ACCENT, Math.max(fav, module == selectedModule ? 0.7F : 0.0F)));
     }
 
     private void drawSettingsPanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
@@ -660,15 +660,19 @@ public final class ClickGui extends Screen {
         float hover = animate(stringHoverAnimations, "bottom:" + label, hovered || active ? 1.0F : 0.0F, 0.18F);
         RenderUtils.drawRoundedRect(context, x, y, w, 20, 7, active ? 0xDD241A43 : lerpColor(0x88111523, 0xAA1C2132, hover));
         drawBorder(context, x, y, w, 20, 7, withAlpha(ACCENT, active ? 180 : (int) (55 * hover)));
-        drawText(context, icon, x + 8, y + 6, active ? ACCENT : TEXT_MUTED, false);
+        RenderUtils.drawRoundedRect(context, x + 9, y + 7, 7, 7, 3, active ? ACCENT : TEXT_MUTED);
         drawText(context, trimToWidth(label, w - 26), x + 24, y + 6, active ? TEXT : TEXT_SOFT, false);
     }
 
     private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size) {
         drawGlowRect(context, x, y, size, size, 10, withAlpha(ACCENT, 30), 2);
         RenderUtils.drawRoundedRect(context, x, y, size, size, 10, 0x661D1534);
-        String icon = module.getDisplayName().isEmpty() ? "M" : module.getDisplayName().substring(0, 1).toUpperCase(Locale.ROOT);
-        drawText(context, icon, x + (size - textWidth(icon)) / 2, y + size / 2 - 4, ACCENT, false);
+        RenderUtils.drawRoundedRect(context, x + 8, y + 7, 8, 10, 4, ACCENT);
+    }
+
+    private void drawCategoryMark(DrawContext context, int x, int y, boolean selected, float hover) {
+        int color = selected ? ACCENT : lerpColor(withAlpha(ACCENT, 165), TEXT_MUTED, hover * 0.2F);
+        RenderUtils.drawRoundedRect(context, x, y, 8, 8, 4, color);
     }
 
     private String iconForCategory(Category category) {

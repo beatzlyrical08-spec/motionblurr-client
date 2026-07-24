@@ -151,25 +151,7 @@ public final class RenderUtils {
 
 
     public static void drawRoundedRect(DrawContext context, int x, int y, int width, int height, int radius, int color) {
-        if (width <= 0 || height <= 0) return;
-        int r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
-        if (r == 0) {
-            context.fill(x, y, x + width, y + height, color);
-            return;
-        }
-        // Draw horizontal spans through DrawContext. This stays on Minecraft's
-        // supported GUI pipeline and avoids TRIANGLE_FAN incompatibilities.
-        for (int row = 0; row < height; row++) {
-            int inset = 0;
-            if (row < r) {
-                double dy = r - row - 0.5D;
-                inset = r - (int) Math.floor(Math.sqrt(Math.max(0.0D, r * r - dy * dy)));
-            } else if (row >= height - r) {
-                double dy = row - (height - r) + 0.5D;
-                inset = r - (int) Math.floor(Math.sqrt(Math.max(0.0D, r * r - dy * dy)));
-            }
-            context.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
-        }
+        SmoothGuiRenderer.roundedRect(context, x, y, width, height, radius, color);
     }
 
     public static void drawRoundedRectGradient(DrawContext context, int x, int y, int width, int height, int radius, int colorTop, int colorBottom) {
