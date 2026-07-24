@@ -152,37 +152,24 @@ public final class RenderUtils {
 
     public static void drawRoundedRect(DrawContext context, int x, int y, int width, int height, int radius, int color) {
         if (width <= 0 || height <= 0) return;
-        float r = Math.max(0.0F, Math.min(radius, Math.min(width, height) * 0.5F));
-        Matrix4f matrix = context.getMatrices().peek().getPositionMatrix();
-        BufferBuilder buffer = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_COLOR);
-        float red = ((color >>> 16) & 255) / 255.0F;
-        float green = ((color >>> 8) & 255) / 255.0F;
-        float blue = (color & 255) / 255.0F;
-        float alpha = ((color >>> 24) & 255) / 255.0F;
-
-        buffer.vertex(matrix, x + width * 0.5F, y + height * 0.5F, 0).color(red, green, blue, alpha);
-        int segments = Math.max(6, (int) Math.ceil(r * 1.5F));
-        float[][] corners = {
-                {x + width - r, y + r, -90.0F},
-                {x + width - r, y + height - r, 0.0F},
-                {x + r, y + height - r, 90.0F},
-                {x + r, y + r, 180.0F}
-        };
-        for (float[] corner : corners) {
-            for (int i = 0; i <= segments; i++) {
-                double angle = Math.toRadians(corner[2] + i * 90.0F / segments);
-                buffer.vertex(matrix,
-                                corner[0] + (float) Math.cos(angle) * r,
-                                corner[1] + (float) Math.sin(angle) * r, 0)
-                        .color(red, green, blue, alpha);
-            }
+        int r = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
+        if (r == 0) {
+            context.fill(x, y, x + width, y + height, color);
+            return;
         }
-        // Close the fan exactly to avoid a sub-pixel seam.
-        buffer.vertex(matrix, x + width - r, y, 0).color(red, green, blue, alpha);
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        CompatShaders.usePositionColor();
-        BufferRenderer.drawWithGlobalProgram(buffer.end());
+        // Draw horizontal spans through DrawContext. This stays on Minecraft's
+        // supported GUI pipeline and avoids TRIANGLE_FAN incompatibilities.
+        for (int row = 0; row < height; row++) {
+            int inset = 0;
+            if (row < r) {
+                double dy = r - row - 0.5D;
+                inset = r - (int) Math.floor(Math.sqrt(Math.max(0.0D, r * r - dy * dy)));
+            } else if (row >= height - r) {
+                double dy = row - (height - r) + 0.5D;
+                inset = r - (int) Math.floor(Math.sqrt(Math.max(0.0D, r * r - dy * dy)));
+            }
+            context.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
+        }
     }
 
     public static void drawRoundedRectGradient(DrawContext context, int x, int y, int width, int height, int radius, int colorTop, int colorBottom) {

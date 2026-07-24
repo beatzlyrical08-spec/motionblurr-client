@@ -32,14 +32,14 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class ClickGui extends Screen {
-    private static final int BACKDROP = 0xCC050610;
-    private static final int WINDOW = 0xEE0B0D18;
-    private static final int GLASS = 0xAA141728;
-    private static final int GLASS_DARK = 0xCC0E101C;
-    private static final int CARD = 0xCC181B2B;
-    private static final int CARD_HOVER = 0xDD24283C;
-    private static final int ROW = 0xAA1A1E31;
-    private static final int ROW_HOVER = 0xCC252A42;
+    private static final int BACKDROP = 0xD9050610;
+    private static final int WINDOW = 0xF2181A24;
+    private static final int GLASS = 0xF21D202C;
+    private static final int GLASS_DARK = 0xF21B1D29;
+    private static final int CARD = 0xF2242734;
+    private static final int CARD_HOVER = 0xF22B2F40;
+    private static final int ROW = 0xF2242734;
+    private static final int ROW_HOVER = 0xF22B2F40;
     private int ACCENT = 0xFF9B5CFF;
     private int ACCENT_2 = 0xFF6D5CFF;
     private static final int TEXT = 0xFFFFFFFF;
@@ -82,6 +82,9 @@ public final class ClickGui extends Screen {
     private boolean friendFocused;
     private double moduleScroll;
     private double settingsScroll;
+    private NumberSetting draggingNumberSetting;
+    private int draggingSliderX;
+    private int draggingSliderWidth;
     private float searchFocusAnimation;
     private float pulseAnimation;
 
@@ -169,6 +172,9 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (draggingNumberSetting != null) {
+            return true;
+        }
         Layout layout = getLayout();
         if (isHovered(mouseX, mouseY, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH)) {
             moduleScroll -= verticalAmount * 36.0D;
@@ -218,7 +224,7 @@ public final class ClickGui extends Screen {
         drawGlowRect(context, layout.x, layout.y, layout.w, layout.h, 18, withAlpha(ACCENT, 44), 6);
         drawCornerGlow(context, layout.x, layout.y, layout.w, layout.h);
         RenderUtils.drawRoundedRect(context, layout.x, layout.y, layout.w, layout.h, 18, WINDOW);
-        RenderUtils.drawRoundedRect(context, layout.x + 4, layout.y + 4, layout.w - 8, layout.h - 8, 15, 0x221D2140);
+        RenderUtils.drawRoundedRect(context, layout.x + 4, layout.y + 4, layout.w - 8, layout.h - 8, 15, 0xF01A1C27);
     }
 
     private void drawSidebar(DrawContext context, Layout layout, int mouseX, int mouseY) {
@@ -293,7 +299,7 @@ public final class ClickGui extends Screen {
     }
 
     private void drawTopBar(DrawContext context, Layout layout, int mouseX, int mouseY) {
-        RenderUtils.drawRoundedRect(context, layout.topX, layout.topY, layout.topW, layout.topH, 10, 0x66101424);
+        RenderUtils.drawRoundedRect(context, layout.topX, layout.topY, layout.topW, layout.topH, 10, 0xF21B1E29);
 
         int searchX = layout.topX + 8;
         int searchY = layout.topY + 6;
@@ -479,16 +485,23 @@ public final class ClickGui extends Screen {
     }
 
     private void drawNumberSetting(DrawContext context, NumberSetting setting, Setting key, int x, int y, int w) {
-        float target = (float) ((setting.getValue() - setting.getMin()) / Math.max(0.0001D, setting.getMax() - setting.getMin()));
-        float progress = animate(sliderAnimations, key, clamp(target, 0.0F, 1.0F), 0.18F);
-        int barW = Math.max(48, w - 88);
-        int barX = x + 8;
-        int barY = y + 28;
-        context.fill(barX, barY, barX + barW, barY + 3, 0xFF30354A);
-        context.fill(barX, barY, barX + Math.round(barW * easeOutCubic(progress)), barY + 3, ACCENT);
-        RenderUtils.drawRoundedRect(context, barX + Math.round(barW * easeOutCubic(progress)) - 3, barY - 3, 8, 8, 4, ACCENT);
+        SliderBounds bounds = getSliderBounds(x, y, w);
+        double range = setting.getMax() - setting.getMin();
+        double progress = range <= 0.0D ? 0.0D : clamp((setting.getValue() - setting.getMin()) / range, 0.0D, 1.0D);
+        int fillWidth = (int) Math.round(bounds.width * progress);
+        int knobCenter = bounds.x + fillWidth;
+        int knobX = clamp(knobCenter - 4, bounds.x - 1, bounds.x + bounds.width - 7);
+        RenderUtils.drawRoundedRect(context, bounds.x, bounds.y, bounds.width, bounds.height, bounds.height / 2, 0xFF30354A);
+        if (fillWidth > 0) {
+            RenderUtils.drawRoundedRect(context, bounds.x, bounds.y, fillWidth, bounds.height, bounds.height / 2, ACCENT);
+        }
+        RenderUtils.drawRoundedRect(context, knobX, bounds.y - 3, 8, 10, 4, 0xFFF4F0FF);
         RenderUtils.drawRoundedRect(context, x + w - 48, y + 9, 40, 20, 7, 0xCC111522);
         drawRightText(context, format(setting.getValue()), x, y + 15, w - 18, TEXT_MUTED);
+    }
+
+    private SliderBounds getSliderBounds(int rowX, int rowY, int rowWidth) {
+        return new SliderBounds(rowX + 8, rowY + 27, Math.max(48, rowWidth - 88), 4);
     }
 
     private void drawKeybindSetting(DrawContext context, KeybindSetting setting, int x, int y, int w) {
@@ -627,6 +640,7 @@ public final class ClickGui extends Screen {
 
     private void drawBottomBar(DrawContext context, Layout layout, int mouseX, int mouseY) {
         int y = layout.y + layout.h - BOTTOMBAR_HEIGHT;
+        RenderUtils.drawRoundedRect(context, layout.x + 6, y, layout.w - 12, BOTTOMBAR_HEIGHT - 4, 9, 0xF21B1D29);
         context.fill(layout.x + 1, y, layout.x + layout.w - 1, y + 1, 0x33464C65);
         int x = layout.moduleX;
         drawBottomTab(context, "GUI", "[]", x, y + 5, 58, true, mouseX, mouseY);
@@ -744,19 +758,69 @@ public final class ClickGui extends Screen {
             return true;
         }
 
-        Setting setting = findSettingAt(mouseX, mouseY, layout);
-        if (setting != null && selectedModule != null) {
-            handleSettingClick(setting, button);
+        SettingRow settingRow = findSettingRowAt(mouseX, mouseY, layout);
+        if (settingRow != null && selectedModule != null) {
+            if (settingRow.setting instanceof NumberSetting numberSetting) {
+                SliderBounds bounds = getSliderBounds(settingRow.x, settingRow.y, settingRow.width);
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
+                        && isHovered(mouseX, mouseY, bounds.x - 4, bounds.y - 5, bounds.width + 8, bounds.height + 10)) {
+                    draggingNumberSetting = numberSetting;
+                    draggingSliderX = bounds.x;
+                    draggingSliderWidth = bounds.width;
+                    updateDraggedNumber(mouseX);
+                    return true;
+                }
+                return true;
+            }
+            if (settingRow.setting instanceof BooleanSetting
+                    && !isHovered(mouseX, mouseY, settingRow.x + settingRow.width - 36, settingRow.y + 13, 28, 13)) {
+                return true;
+            }
+            handleSettingClick(settingRow.setting, button);
             return true;
         }
 
-        if (selectedModule != null && isHovered(mouseX, mouseY, layout.settingsX + layout.settingsW - 58, layout.settingsY + 24, 48, 28)
+        if (selectedModule != null && isHovered(mouseX, mouseY, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18, 32, 15)
                 && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             selectedModule.toggle();
             return true;
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && draggingNumberSetting != null) {
+            updateDraggedNumber(mouseX);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && draggingNumberSetting != null) {
+            updateDraggedNumber(mouseX);
+            draggingNumberSetting = null;
+            draggingSliderX = 0;
+            draggingSliderWidth = 0;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void updateDraggedNumber(double mouseX) {
+        if (draggingNumberSetting == null || draggingSliderWidth <= 0) return;
+        double progress = clamp((mouseX - draggingSliderX) / draggingSliderWidth, 0.0D, 1.0D);
+        double min = draggingNumberSetting.getMin();
+        double max = draggingNumberSetting.getMax();
+        double rawValue = min + progress * (max - min);
+        double increment = draggingNumberSetting.getIncrement();
+        double snapped = increment > 0.0D
+                ? Math.round((rawValue - min) / increment) * increment + min
+                : rawValue;
+        draggingNumberSetting.setValue(clamp(snapped, min, max));
     }
 
     private boolean handleCategoryClick(double mouseX, double mouseY, Layout layout) {
@@ -915,7 +979,9 @@ public final class ClickGui extends Screen {
 
         for (Module current : getFilteredModules()) {
             if (current == module) {
-                return isHovered(mouseX, mouseY, listX + listW - 62, currentY + 8, 38, 24);
+                float hover = moduleHoverAnimations.getOrDefault(current, 0.0F);
+                int drawY = (int) Math.round(currentY) - Math.round(2 * easeOutCubic(hover));
+                return isHovered(mouseX, mouseY, listX + listW - 58, drawY + 13, 28, 13);
             }
             currentY += CARD_HEIGHT + GAP;
         }
@@ -937,7 +1003,7 @@ public final class ClickGui extends Screen {
         return false;
     }
 
-    private Setting findSettingAt(double mouseX, double mouseY, Layout layout) {
+    private SettingRow findSettingRowAt(double mouseX, double mouseY, Layout layout) {
         if (selectedModule == null || !isHovered(mouseX, mouseY, layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH)) {
             return null;
         }
@@ -953,7 +1019,7 @@ public final class ClickGui extends Screen {
         double rowY = listY - settingsScroll;
         for (Setting setting : selectedModule.getSettings()) {
             if (isHovered(mouseX, mouseY, listX, rowY, listW, SETTING_HEIGHT)) {
-                return setting;
+                return new SettingRow(setting, listX, (int) Math.round(rowY), listW);
             }
             rowY += SETTING_HEIGHT + 8;
         }
@@ -1135,7 +1201,7 @@ public final class ClickGui extends Screen {
     private void drawSoftPanel(DrawContext context, int x, int y, int w, int h, int radius) {
         drawGlowRect(context, x, y, w, h, radius, withAlpha(ACCENT, 15), 3);
         RenderUtils.drawRoundedRect(context, x, y, w, h, radius, GLASS);
-        RenderUtils.drawRoundedRect(context, x + 3, y + 3, w - 6, h - 6, Math.max(1, radius - 3), 0x181D2140);
+        RenderUtils.drawRoundedRect(context, x + 3, y + 3, w - 6, h - 6, Math.max(1, radius - 3), 0xF01B1E29);
     }
 
     private void drawBorderedRoundedRect(DrawContext context, int x, int y, int w, int h, int radius, int fill, int border) {
@@ -1299,5 +1365,11 @@ public final class ClickGui extends Screen {
                           int moduleX, int moduleY, int moduleW, int moduleH,
                           int settingsX, int settingsY, int settingsW, int settingsH,
                           int searchX, int searchY, int searchW, int searchH) {
+    }
+
+    private record SliderBounds(int x, int y, int width, int height) {
+    }
+
+    private record SettingRow(Setting setting, int x, int y, int width) {
     }
 }

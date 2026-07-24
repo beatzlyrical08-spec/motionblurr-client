@@ -20,6 +20,10 @@ public class NumberSetting extends Setting {
     }
 
     public void setValue(double value) {
+        if (increment <= 0.0D) {
+            this.value = Math.max(min, Math.min(max, value));
+            return;
+        }
         double precision = 1.0D / increment;
         this.value = Math.round(Math.max(min, Math.min(max, value)) * precision) / precision;
     }
@@ -32,4 +36,3 @@ public class NumberSetting extends Setting {
         return (float) value;
     }
 }
-
