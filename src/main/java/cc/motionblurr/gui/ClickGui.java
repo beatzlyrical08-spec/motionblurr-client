@@ -15,17 +15,12 @@ import cc.motionblurr.profiles.ProfileManager;
 import cc.motionblurr.utils.friend.FriendManager;
 import cc.motionblurr.utils.keybinding.KeyUtils;
 import cc.motionblurr.utils.render.RenderUtils;
-import cc.motionblurr.utils.render.font.FontManager;
-import cc.motionblurr.utils.render.font.fonts.FontRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -37,8 +32,6 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class ClickGui extends Screen {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MotionBlurr/ClickGuiFont");
-
     private static final int BACKDROP = 0xCC050610;
     private static final int WINDOW = 0xEE0B0D18;
     private static final int GLASS = 0xAA141728;
@@ -91,9 +84,6 @@ public final class ClickGui extends Screen {
     private double settingsScroll;
     private float searchFocusAnimation;
     private float pulseAnimation;
-    private FontRenderer arial;
-    private boolean customFontUnavailable;
-    private boolean fontFailureLogged;
 
     public ClickGui() {
         super(Text.literal("MotionBlurr"));
@@ -195,7 +185,6 @@ public final class ClickGui extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        ensureArial();
         pulseAnimation += Math.max(0.3F, delta) * 0.035F;
         searchFocusAnimation = animate(searchFocusAnimation, searchFocused ? 1.0F : 0.0F, 0.18F);
 
@@ -1161,61 +1150,16 @@ public final class ClickGui extends Screen {
         drawText(context, text, x + right - textWidth(text), y, color, false);
     }
 
-    private void ensureArial() {
-        if (arial == null && !customFontUnavailable && client != null && client.getWindow() != null) {
-            try {
-                arial = MotionBlurrClient.INSTANCE.fontManager.getSize(10, FontManager.Type.Arial);
-            } catch (Throwable failure) {
-                disableCustomFont(failure);
-            }
-        }
-    }
-
     private int drawText(DrawContext context, String text, float x, float y, int color, boolean shadow) {
-        if (arial != null && !customFontUnavailable) {
-            try {
-                if (shadow) {
-                    arial.drawString(context.getMatrices(), text, x + 0.5F, y + 0.5F,
-                            new Color(0, 0, 0, Math.max(20, ((color >>> 24) & 255) / 2)));
-                }
-                arial.drawString(context.getMatrices(), text, x, y, new Color(color, true));
-                return (int) Math.ceil(arial.getStringWidth(text));
-            } catch (Throwable failure) {
-                disableCustomFont(failure);
-            }
-        }
         return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, shadow);
     }
 
     private int textWidth(String text) {
-        if (arial != null && !customFontUnavailable) {
-            try {
-                return (int) Math.ceil(arial.getStringWidth(text));
-            } catch (Throwable failure) {
-                disableCustomFont(failure);
-            }
-        }
         return textRenderer.getWidth(text);
     }
 
     private int fontHeight() {
-        if (arial != null && !customFontUnavailable) {
-            try {
-                return (int) Math.ceil(arial.getStringHeight("Ag"));
-            } catch (Throwable failure) {
-                disableCustomFont(failure);
-            }
-        }
         return textRenderer.fontHeight;
-    }
-
-    private void disableCustomFont(Throwable failure) {
-        arial = null;
-        customFontUnavailable = true;
-        if (!fontFailureLogged) {
-            fontFailureLogged = true;
-            LOGGER.error("Custom Arial renderer failed; using Minecraft text renderer for this ClickGUI", failure);
-        }
     }
 
     private boolean isLeftOrRight(int button) {
