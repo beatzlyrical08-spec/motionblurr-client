@@ -77,8 +77,6 @@ class GlyphMap {
             int width = (int) Math.ceil(stringBounds.getWidth());
             int height = (int) Math.ceil(stringBounds.getHeight());
             generatedChars++;
-            maxX = Math.max(maxX, currentX + width);
-            maxY = Math.max(maxY, currentY + height);
             if (charNX >= charsVert) {
                 currentX = 0;
                 currentY += currentRowMaxY + pixelPadding; // add height of highest glyph, and reset
@@ -87,6 +85,8 @@ class GlyphMap {
             }
             currentRowMaxY = Math.max(currentRowMaxY, height); // calculate the highest glyph in this row
             glyphs1.add(new Glyph(currentX, currentY, width, height, currentChar, this));
+            maxX = Math.max(maxX, currentX + width);
+            maxY = Math.max(maxY, currentY + height);
             currentX += width + pixelPadding;
             charNX++;
         }

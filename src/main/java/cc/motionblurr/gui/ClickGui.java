@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class ClickGui extends Screen {
+    private final ClickGuiFont guiFont = new ClickGuiFont();
     private static final int BACKDROP = 0xD9050610;
     private static final int WINDOW = 0xF2181A24;
     private static final int GLASS = 0xF21D202C;
@@ -191,6 +192,7 @@ public final class ClickGui extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        guiFont.initializeIfReady();
         pulseAnimation += Math.max(0.3F, delta) * 0.035F;
         searchFocusAnimation = animate(searchFocusAnimation, searchFocused ? 1.0F : 0.0F, 0.18F);
 
@@ -232,8 +234,8 @@ public final class ClickGui extends Screen {
         drawGlowRect(context, layout.sidebarX + 12, layout.sidebarY + 12, 24, 24, 8, withAlpha(ACCENT, 58), 3);
         RenderUtils.drawRoundedRect(context, layout.sidebarX + 13, layout.sidebarY + 13, 22, 22, 7, 0xFF1B1632);
         drawText(context, "MB", layout.sidebarX + 18, layout.sidebarY + 21, ACCENT, false);
-        drawText(context, "MOTIONBLURR", layout.sidebarX + 44, layout.sidebarY + 14, TEXT, false);
-        drawText(context, "rise above.", layout.sidebarX + 44, layout.sidebarY + 27, TEXT_MUTED, false);
+        drawTitleText(context, "MOTIONBLURR", layout.sidebarX + 44, layout.sidebarY + 13, TEXT);
+        drawSmallText(context, "rise above.", layout.sidebarX + 44, layout.sidebarY + 27, TEXT_MUTED);
 
         int itemX = layout.sidebarX + 8;
         int itemY = layout.sidebarY + 50;
@@ -276,7 +278,7 @@ public final class ClickGui extends Screen {
             drawText(context, "MotionBlurr", layout.sidebarX + 46, infoY + 9, TEXT_SOFT, false);
             drawText(context, "Premium", layout.sidebarX + 46, infoY + 23, ACCENT, false);
         }
-        drawText(context, "v1.0.0", layout.sidebarX + 12, layout.sidebarY + layout.sidebarH - 16, TEXT_MUTED, false);
+        drawSmallText(context, "v1.0.0", layout.sidebarX + 12, layout.sidebarY + layout.sidebarH - 16, TEXT_MUTED);
     }
 
     private int drawSidebarAction(DrawContext context, String label, String icon, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
@@ -328,8 +330,8 @@ public final class ClickGui extends Screen {
         boolean hovered = isHovered(mouseX, mouseY, x, y, 22, 22);
         float hover = animate(stringHoverAnimations, "top:" + label, hovered ? 1.0F : 0.0F, 0.18F);
         RenderUtils.drawRoundedRect(context, x, y, 22, 22, 7, lerpColor(0x44111523, 0xAA1F2436, hover));
-        drawText(context, label, x + (22 - textWidth(label)) / 2, y + 7,
-                accent ? lerpColor(ACCENT, TEXT, hover) : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
+        drawCenteredText(context, label, x + 11, y + 7,
+                accent ? lerpColor(ACCENT, TEXT, hover) : lerpColor(TEXT_MUTED, TEXT_SOFT, hover));
     }
 
     private void drawModulePanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
@@ -392,7 +394,7 @@ public final class ClickGui extends Screen {
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
         String description = module.getDescription() == null ? "" : module.getDescription();
         if (w > 185) {
-            drawText(context, trimToWidth(description, w - 122), x + 38, drawY + 21, TEXT_MUTED, false);
+            drawSmallText(context, trimToWidth(description, w - 122, ClickGuiFont.Size.SMALL), x + 38, drawY + 21, TEXT_MUTED);
         }
 
         boolean favorite = favorites.contains(module);
@@ -417,7 +419,8 @@ public final class ClickGui extends Screen {
         drawModuleIcon(context, module, layout.settingsX + 12, layout.settingsY + 12, 24);
 
         drawText(context, trimToWidth(module.getDisplayName(), layout.settingsW - 92), layout.settingsX + 44, layout.settingsY + 11, TEXT, false);
-        drawText(context, trimToWidth(module.getDescription(), layout.settingsW - 96), layout.settingsX + 44, layout.settingsY + 26, TEXT_MUTED, false);
+        drawSmallText(context, trimToWidth(module.getDescription(), layout.settingsW - 96, ClickGuiFont.Size.SMALL),
+                layout.settingsX + 44, layout.settingsY + 26, TEXT_MUTED);
         drawToggle(context, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18,
                 moduleToggleAnimations.getOrDefault(module, module.isEnabled() ? 1.0F : 0.0F), true);
 
@@ -705,7 +708,7 @@ public final class ClickGui extends Screen {
     private void drawPill(DrawContext context, int x, int y, int w, int h, String text, boolean active) {
         RenderUtils.drawRoundedRect(context, x, y, w, h, h / 2, active ? 0xDD33215B : 0xAA111522);
         drawBorder(context, x, y, w, h, h / 2, withAlpha(ACCENT, active ? 145 : 70));
-        drawText(context, text, x + (w - textWidth(text)) / 2, y + 11, active ? TEXT : TEXT_MUTED, false);
+        drawCenteredText(context, text, x + w / 2.0F, y + 11, active ? TEXT : TEXT_MUTED);
     }
 
     @Override
@@ -1221,15 +1224,28 @@ public final class ClickGui extends Screen {
     }
 
     private int drawText(DrawContext context, String text, float x, float y, int color, boolean shadow) {
-        return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, shadow);
+        return guiFont.draw(context, textRenderer, text, x, y, color, shadow, ClickGuiFont.Size.NORMAL);
+    }
+
+    private int drawTitleText(DrawContext context, String text, float x, float y, int color) {
+        return guiFont.draw(context, textRenderer, text, x, y, color, false, ClickGuiFont.Size.TITLE);
+    }
+
+    private int drawSmallText(DrawContext context, String text, float x, float y, int color) {
+        return guiFont.draw(context, textRenderer, text, x, y, color, false, ClickGuiFont.Size.SMALL);
+    }
+
+    private int drawCenteredText(DrawContext context, String text, float centerX, float y, int color) {
+        return guiFont.drawCentered(context, textRenderer, text, centerX, y, color, false,
+                ClickGuiFont.Size.NORMAL);
     }
 
     private int textWidth(String text) {
-        return textRenderer.getWidth(text);
+        return guiFont.width(textRenderer, text, ClickGuiFont.Size.NORMAL);
     }
 
     private int fontHeight() {
-        return textRenderer.fontHeight;
+        return guiFont.height(textRenderer, ClickGuiFont.Size.NORMAL);
     }
 
     private boolean isLeftOrRight(int button) {
@@ -1241,12 +1257,16 @@ public final class ClickGui extends Screen {
     }
 
     private String trimToWidth(String text, int maxWidth) {
+        return trimToWidth(text, maxWidth, ClickGuiFont.Size.NORMAL);
+    }
+
+    private String trimToWidth(String text, int maxWidth, ClickGuiFont.Size size) {
         if (text == null) return "";
-        if (textWidth(text) <= maxWidth) return text;
+        if (guiFont.width(textRenderer, text, size) <= maxWidth) return text;
         String ellipsis = "...";
-        int limit = Math.max(0, maxWidth - textWidth(ellipsis));
+        int limit = Math.max(0, maxWidth - guiFont.width(textRenderer, ellipsis, size));
         String trimmed = text;
-        while (!trimmed.isEmpty() && textWidth(trimmed) > limit) {
+        while (!trimmed.isEmpty() && guiFont.width(textRenderer, trimmed, size) > limit) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
         return trimmed + ellipsis;
