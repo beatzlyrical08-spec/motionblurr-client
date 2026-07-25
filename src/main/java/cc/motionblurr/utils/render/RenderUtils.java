@@ -151,7 +151,13 @@ public final class RenderUtils {
 
 
     public static void drawRoundedRect(DrawContext context, int x, int y, int width, int height, int radius, int color) {
-        SmoothGuiRenderer.roundedRect(context, x, y, width, height, radius, color);
+        if (width <= 0 || height <= 0 || ((color >>> 24) & 255) == 0) {
+            return;
+        }
+        // Guaranteed VulkanMod-safe GUI fallback. The previous smooth path
+        // depended on reflected shader selection and could silently draw
+        // nothing, which removed every panel and control from ClickGui.
+        context.fill(x, y, x + width, y + height, color);
     }
 
     public static void drawRoundedRectGradient(DrawContext context, int x, int y, int width, int height, int radius, int colorTop, int colorBottom) {
