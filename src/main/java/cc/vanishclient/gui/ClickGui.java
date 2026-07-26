@@ -1,6 +1,8 @@
 package cc.vanishclient.gui;
 
 import cc.vanishclient.VanishClient;
+import cc.vanishclient.gui.icons.IconKey;
+import cc.vanishclient.gui.icons.ModuleIconRegistry;
 import cc.vanishclient.module.Category;
 import cc.vanishclient.module.Module;
 import cc.vanishclient.module.setting.BooleanSetting;
@@ -16,6 +18,7 @@ import cc.vanishclient.utils.friend.FriendManager;
 import cc.vanishclient.utils.keybinding.KeyUtils;
 import cc.vanishclient.utils.render.RenderUtils;
 import cc.vanishclient.gui.nanovg.NanoVGRenderer;
+import cc.vanishclient.gui.nanovg.SvgIconManager;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -34,6 +37,8 @@ import java.util.UUID;
 public final class ClickGui extends Screen {
     private static final boolean NANOVG_VALIDATION_MODE = false;
     private final NanoVGRenderer nanoVG = NanoVGRenderer.getInstance();
+    private final SvgIconManager svgIcons = SvgIconManager.getInstance();
+    private final ModuleIconRegistry moduleIcons = ModuleIconRegistry.getInstance();
     private static final int BACKDROP = 0xD9050610;
     private static final int WINDOW = 0xF2181A24;
     private static final int GLASS = 0xF21D202C;
@@ -360,16 +365,16 @@ public final class ClickGui extends Screen {
                 RenderUtils.drawRoundedRect(context, itemX + 3, itemY + 6, 2, itemH - 12, 2, ACCENT);
             }
 
-            drawCategoryMark(context, itemX + 12 + offset, itemY + 8, selected, hover);
+            drawCategoryMark(context, category, itemX + 10 + offset, itemY + 5, 13, selected, hover);
             drawText(context, category.getName(), itemX + 28 + offset, itemY + 8,
                     selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
             itemY += itemH + 4;
         }
 
         itemY += 2;
-        itemY = drawSidebarAction(context, "Favorites", "*", viewMode == ViewMode.FAVORITES, itemX, itemY, itemW, itemH, mouseX, mouseY);
-        itemY = drawSidebarAction(context, "Friends", "+", viewMode == ViewMode.FRIENDS, itemX, itemY, itemW, itemH, mouseX, mouseY);
-        drawSidebarAction(context, "Settings", "S", viewMode == ViewMode.SETTINGS, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        itemY = drawSidebarAction(context, "Favorites", IconKey.STAR_PLUS, viewMode == ViewMode.FAVORITES, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        itemY = drawSidebarAction(context, "Friends", IconKey.USER, viewMode == ViewMode.FRIENDS, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        drawSidebarAction(context, "Settings", IconKey.SPARKLE, viewMode == ViewMode.SETTINGS, itemX, itemY, itemW, itemH, mouseX, mouseY);
 
         if (layout.sidebarH > 330) {
             int infoY = layout.sidebarY + layout.sidebarH - 66;
@@ -382,7 +387,7 @@ public final class ClickGui extends Screen {
         drawSmallText(context, "v1.0.0", layout.sidebarX + 12, layout.sidebarY + layout.sidebarH - 16, TEXT_MUTED);
     }
 
-    private int drawSidebarAction(DrawContext context, String label, String icon, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
+    private int drawSidebarAction(DrawContext context, String label, IconKey icon, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, h);
         float hover = animate(stringHoverAnimations, "nav:" + label, hovered ? 1.0F : 0.0F, 0.18F);
         int offset = Math.round(lerp(0, 4, easeOutCubic(hover)));
@@ -394,8 +399,8 @@ public final class ClickGui extends Screen {
             RenderUtils.drawRoundedRect(context, x + 3, y + 6, 2, h - 12, 2, ACCENT);
         }
 
-        RenderUtils.drawRoundedRect(context, x + 13 + offset, y + 9, 7, 7, 4,
-                selected ? ACCENT : lerpColor(TEXT_DIM, TEXT_MUTED, hover));
+        drawSvgIcon(context, icon, x + 10 + offset, y + 5, 13,
+                selected ? ACCENT : lerpColor(TEXT_DIM, TEXT_MUTED, hover), 1.0F);
         drawText(context, label, x + 28 + offset, y + 8,
                 selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
         return y + h + 4;
@@ -482,8 +487,11 @@ public final class ClickGui extends Screen {
             RenderUtils.drawRoundedRect(context, x, drawY, 3, CARD_HEIGHT, 2, withAlpha(ACCENT, (int) (170 * Math.max(selected, toggle))));
         }
 
-        drawModuleIcon(context, module, x + 8, drawY + 6, 16);
-        drawText(context, trimToWidth(module.getName(), w - 104), x + 31, drawY + 10,
+        int iconColor = module.isEnabled()
+                ? lerpColor(TEXT_MUTED, ACCENT, Math.max(0.72F, toggle))
+                : lerpColor(TEXT_MUTED, TEXT_SOFT, Math.max(hover, selected));
+        drawModuleIcon(context, module, x + 8, drawY + 7, 14, iconColor, 1.0F);
+        drawText(context, trimToWidth(module.getName(), w - 104), x + 29, drawY + 10,
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
 
         boolean favorite = favorites.contains(module);
@@ -804,14 +812,24 @@ public final class ClickGui extends Screen {
         drawText(context, trimToWidth(label, w - 26), x + 24, y + 6, active ? TEXT : TEXT_SOFT, false);
     }
 
-    private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size) {
-        RenderUtils.drawRoundedRect(context, x, y, size, size, Math.max(4, size / 3), 0x66202634);
-        RenderUtils.drawRoundedRect(context, x + size / 3, y + size / 3, Math.max(5, size / 3), Math.max(5, size / 3), 3, ACCENT);
+    private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size, int color, float alpha) {
+        drawSvgIcon(context, moduleIcons.iconFor(module), x, y, size, color, alpha);
     }
 
-    private void drawCategoryMark(DrawContext context, int x, int y, boolean selected, float hover) {
+    private void drawCategoryMark(DrawContext context, Category category, int x, int y, int size, boolean selected, float hover) {
         int color = selected ? ACCENT : lerpColor(withAlpha(ACCENT, 165), TEXT_MUTED, hover * 0.2F);
-        RenderUtils.drawRoundedRect(context, x, y, 8, 8, 4, color);
+        drawSvgIcon(context, moduleIcons.iconFor(category), x, y, size, color, 1.0F);
+    }
+
+    private void drawSvgIcon(DrawContext context, IconKey icon, int x, int y, int size, int color, float alpha) {
+        if (nanoVG.isInFrame()) {
+            svgIcons.draw(icon, x, y, size, size, color, alpha);
+            return;
+        }
+        int fallbackSize = Math.max(5, size / 2);
+        int fallbackX = x + (size - fallbackSize) / 2;
+        int fallbackY = y + (size - fallbackSize) / 2;
+        RenderUtils.drawRoundedRect(context, fallbackX, fallbackY, fallbackSize, fallbackSize, Math.max(2, fallbackSize / 2), color);
     }
 
     private String iconForCategory(Category category) {

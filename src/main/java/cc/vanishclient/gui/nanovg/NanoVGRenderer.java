@@ -88,6 +88,11 @@ public final class NanoVGRenderer {
         return inFrame && initialized && !disabled;
     }
 
+    long contextHandle() {
+        requireFrame();
+        return vg;
+    }
+
     public void disableAfterRenderFailure(Throwable failure) {
         if (inFrame) {
             try {

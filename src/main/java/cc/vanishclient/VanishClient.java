@@ -2,6 +2,7 @@ package cc.vanishclient;
 
 import cc.vanishclient.module.ModuleManager;
 import cc.vanishclient.module.events.MouseModuleHandler;
+import cc.vanishclient.gui.nanovg.SvgIconManager;
 import cc.vanishclient.profiles.ProfileManager;
 import cc.vanishclient.utils.jvm.ModMenuHider;
 import cc.vanishclient.utils.notification.NotificationManager;
@@ -22,6 +23,7 @@ public final class VanishClient implements ClientModInitializer {
     public static final String CLIENT_NAME = "VanishClient";
     public static final String CLIENT_VERSION = "v1.0";
     public static final boolean shouldUseMouseEvent = System.getProperty("os.name").toLowerCase().contains("windows");
+    private static boolean svgIconShutdownHookRegistered;
     public static VanishClient INSTANCE;
     public static MinecraftClient mc;
     public final IEventBus eventBus;
@@ -44,6 +46,7 @@ public final class VanishClient implements ClientModInitializer {
         this.profileManager = new ProfileManager();
         this.mouseModuleHandler = new MouseModuleHandler();
         this.notificationManager = NotificationManager.getInstance();
+        registerSvgIconShutdownHook();
 
         eventBus.subscribe(mouseModuleHandler);
         eventBus.subscribe(notificationManager);
@@ -61,5 +64,12 @@ public final class VanishClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         // Double initialization prevention, it's already initializing in the constructor
+    }
+
+    private static void registerSvgIconShutdownHook() {
+        if (svgIconShutdownHookRegistered) return;
+        svgIconShutdownHookRegistered = true;
+        SvgIconManager.getInstance().preloadAll();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> SvgIconManager.getInstance().dispose(), "VanishClient SVG Icon Cleanup"));
     }
 }
