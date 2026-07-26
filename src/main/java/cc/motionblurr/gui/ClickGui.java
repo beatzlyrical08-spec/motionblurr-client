@@ -21,7 +21,6 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -43,8 +42,8 @@ public final class ClickGui extends Screen {
     private static final int CARD_HOVER = 0xF22B2F40;
     private static final int ROW = 0xF2242734;
     private static final int ROW_HOVER = 0xF22B2F40;
-    private int ACCENT = 0xFF9B5CFF;
-    private int ACCENT_2 = 0xFF6D5CFF;
+    private int ACCENT = 0xFF4C8DFF;
+    private int ACCENT_2 = 0xFF2E65C8;
     private static final int TEXT = 0xFFFFFFFF;
     private static final int TEXT_SOFT = 0xFFE8EAF4;
     private static final int TEXT_MUTED = 0xFF9EA3B7;
@@ -56,9 +55,9 @@ public final class ClickGui extends Screen {
     private static final int SIDEBAR_WIDTH = 126;
     private static final int TOPBAR_HEIGHT = 38;
     private static final int BOTTOMBAR_HEIGHT = 30;
-    private static final int CARD_HEIGHT = 38;
-    private static final int SETTING_HEIGHT = 40;
-    private static final int GAP = 6;
+    private static final int CARD_HEIGHT = 28;
+    private static final int SETTING_HEIGHT = 34;
+    private static final int GAP = 5;
 
     private final Map<Category, Float> categoryHoverAnimations = new EnumMap<>(Category.class);
     private final Map<Module, Float> moduleHoverAnimations = new HashMap<>();
@@ -73,21 +72,35 @@ public final class ClickGui extends Screen {
     private Category selectedCategory = Category.COMBAT;
     private ViewMode viewMode = ViewMode.CATEGORY;
     private GuiSize guiSize = GuiSize.SMALL;
-    private AccentPreset accentPreset = AccentPreset.PURPLE;
+    private AccentPreset accentPreset = AccentPreset.BLUE;
     private Module selectedModule;
+    private Module popupModule;
     private KeybindSetting listeningKeybind;
     private String searchText = "";
-    private String profileInput = "default";
+    private String profileInput = "";
     private String friendInput = "";
-    private String activeProfile = "default";
+    private String selectedProfile = "Default";
+    private String modalProfileInput = "";
+    private String statusMessage = "";
+    private long statusMessageUntil;
     private boolean searchFocused;
     private boolean profileFocused;
+    private boolean profileCreateModal;
+    private boolean profileCreateFocused;
+    private boolean confirmDeleteProfile;
     private boolean friendFocused;
     private double moduleScroll;
-    private double settingsScroll;
+    private double popupScroll;
     private NumberSetting draggingNumberSetting;
     private int draggingSliderX;
     private int draggingSliderWidth;
+    private int popupX;
+    private int popupY;
+    private int popupW;
+    private int popupH;
+    private long popupAnimationStart;
+    private boolean popupClosing;
+    private float popupAnimationProgress;
     private float searchFocusAnimation;
     private float pulseAnimation;
     private long lastRenderNanos = System.nanoTime();
@@ -103,6 +116,15 @@ public final class ClickGui extends Screen {
     }
 
     @Override
+    protected void init() {
+        ProfileManager manager = MotionBlurrClient.INSTANCE.getProfileManager();
+        selectedProfile = manager.getActiveProfile();
+        ACCENT = accentPreset.color;
+        ACCENT_2 = accentPreset.secondary;
+        super.init();
+    }
+
+    @Override
     public void close() {
         stopListening();
         if (client != null) {
@@ -115,8 +137,25 @@ public final class ClickGui extends Screen {
         if (listeningKeybind != null) {
             if (keyCode != GLFW.GLFW_KEY_ESCAPE) {
                 listeningKeybind.setKeyCode(keyCode);
+                markProfileDirty();
             }
             stopListening();
+            return true;
+        }
+
+        if (profileCreateModal) {
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                closeProfileCreateModal(false);
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+                createProfileFromModal();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_BACKSPACE && !modalProfileInput.isEmpty()) {
+                modalProfileInput = modalProfileInput.substring(0, modalProfileInput.length() - 1);
+                return true;
+            }
             return true;
         }
 
@@ -130,6 +169,10 @@ public final class ClickGui extends Screen {
         }
 
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (popupModule != null) {
+                closeSettingsPopup();
+                return true;
+            }
             if (searchFocused || profileFocused || friendFocused) {
                 searchFocused = false;
                 profileFocused = false;
@@ -165,6 +208,10 @@ public final class ClickGui extends Screen {
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
+        if (profileCreateModal && !Character.isISOControl(chr)) {
+            modalProfileInput += chr;
+            return true;
+        }
         if (profileFocused && !Character.isISOControl(chr)) {
             profileInput += chr;
             return true;
@@ -187,13 +234,13 @@ public final class ClickGui extends Screen {
             return true;
         }
         Layout layout = getLayout();
-        if (isHovered(mouseX, mouseY, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH)) {
-            moduleScroll -= verticalAmount * 36.0D;
+        if (popupModule != null && isHovered(mouseX, mouseY, popupX, popupY, popupW, popupH)) {
+            popupScroll -= verticalAmount * 30.0D;
             clampScrolls();
             return true;
         }
-        if (isHovered(mouseX, mouseY, layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH)) {
-            settingsScroll -= verticalAmount * 36.0D;
+        if (isHovered(mouseX, mouseY, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH)) {
+            moduleScroll -= verticalAmount * 36.0D;
             clampScrolls();
             return true;
         }
@@ -245,11 +292,12 @@ public final class ClickGui extends Screen {
                     drawFriendHelpPanel(context, layout);
                 } else if (viewMode == ViewMode.SETTINGS) {
                     drawGuiSettingsPage(context, layout, mouseX, mouseY);
-                } else {
+        } else {
             drawModulePanel(context, layout, mouseX, mouseY);
-            drawSettingsPanel(context, layout, mouseX, mouseY);
+            drawSettingsPopup(context, layout, mouseX, mouseY);
         }
         drawBottomBar(context, layout, mouseX, mouseY);
+        drawProfileCreateModal(context, layout, mouseX, mouseY);
     }
 
     private void drawNanoVGValidation(Layout layout) {
@@ -274,12 +322,9 @@ public final class ClickGui extends Screen {
 
     private void drawBackdrop(DrawContext context) {
         drawRect(context, 0, 0, width, height, BACKDROP);
-        drawGlowRect(context, width / 2 - 180, height / 2 - 130, 360, 260, 28, withAlpha(ACCENT, 26), 5);
     }
 
     private void drawWindow(DrawContext context, Layout layout) {
-        drawGlowRect(context, layout.x, layout.y, layout.w, layout.h, 18, withAlpha(ACCENT, 44), 6);
-        drawCornerGlow(context, layout.x, layout.y, layout.w, layout.h);
         RenderUtils.drawRoundedRect(context, layout.x, layout.y, layout.w, layout.h, 18, WINDOW);
         RenderUtils.drawRoundedRect(context, layout.x + 4, layout.y + 4, layout.w - 8, layout.h - 8, 15, 0xF01A1C27);
     }
@@ -427,82 +472,74 @@ public final class ClickGui extends Screen {
     private void drawModuleCard(DrawContext context, Module module, int x, int y, int w, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, CARD_HEIGHT);
         float hover = animate(moduleHoverAnimations, module, hovered ? 1.0F : 0.0F, 0.16F);
-        float selected = animate(moduleSelectAnimations, module, module == selectedModule ? 1.0F : 0.0F, 0.14F);
+        float selected = animate(moduleSelectAnimations, module, module == selectedModule || module == popupModule ? 1.0F : 0.0F, 0.14F);
         float toggle = animate(moduleToggleAnimations, module, module.isEnabled() ? 1.0F : 0.0F, 0.16F);
-        int lift = Math.round(2 * easeOutCubic(hover));
-        int drawY = y - lift;
+        int drawY = y;
         int bg = lerpColor(CARD, CARD_HOVER, hover);
 
-        if (selected > 0.01F || module.isEnabled()) {
-            int glowAlpha = (int) ((32 + 34 * pulse()) * Math.max(selected, toggle * 0.7F));
-            drawGlowRect(context, x, drawY, w, CARD_HEIGHT, 12, withAlpha(ACCENT, glowAlpha), 4);
-        }
-
         RenderUtils.drawRoundedRect(context, x, drawY, w, CARD_HEIGHT, 9, bg);
-        if (selected > 0.01F) {
-            drawBorder(context, x, drawY, w, CARD_HEIGHT, 9, withAlpha(ACCENT, (int) (210 * selected)));
-        } else if (hover > 0.01F) {
-            drawBorder(context, x, drawY, w, CARD_HEIGHT, 9, withAlpha(ACCENT, (int) (75 * hover)));
+        if (selected > 0.01F || module.isEnabled()) {
+            RenderUtils.drawRoundedRect(context, x, drawY, 3, CARD_HEIGHT, 2, withAlpha(ACCENT, (int) (170 * Math.max(selected, toggle))));
         }
 
-        drawModuleIcon(context, module, x + 8, drawY + 7, 24);
-        drawText(context, trimToWidth(module.getDisplayName(), w - 104), x + 38, drawY + 7,
+        drawModuleIcon(context, module, x + 8, drawY + 6, 16);
+        drawText(context, trimToWidth(module.getName(), w - 104), x + 31, drawY + 10,
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
-        String description = module.getDescription() == null ? "" : module.getDescription();
-        if (w > 185) {
-            drawSmallText(context, trimToWidth(description, w - 122, 8.0F), x + 38, drawY + 21, TEXT_MUTED);
-        }
 
         boolean favorite = favorites.contains(module);
         float fav = animate(stringHoverAnimations, "fav:" + module.getName(), favorite ? 1.0F : 0.0F, 0.18F);
-        drawToggle(context, x + w - 58, drawY + 13, toggle, false);
-        RenderUtils.drawRoundedRect(context, x + w - 17, drawY + 16, 7, 7, favorite ? 4 : 2,
+        drawToggle(context, x + w - 58, drawY + 8, toggle, false);
+        RenderUtils.drawRoundedRect(context, x + w - 17, drawY + 10, 7, 7, favorite ? 4 : 2,
                 lerpColor(TEXT_DIM, ACCENT, Math.max(fav, module == selectedModule ? 0.7F : 0.0F)));
     }
 
-    private void drawSettingsPanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
-        drawSoftPanel(context, layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH, 15);
-        Module module = selectedModule;
-
-        if (module == null) {
-            drawText(context, "Select a module", layout.settingsX + 10, layout.settingsY + 12, TEXT, false);
-            drawText(context, "Settings will appear here.", layout.settingsX + 10, layout.settingsY + 28, TEXT_MUTED, false);
+    private void drawSettingsPopup(DrawContext context, Layout layout, int mouseX, int mouseY) {
+        if (popupModule == null) return;
+        float target = popupClosing ? 0.0F : 1.0F;
+        float progress = animate(popupAnimationProgress, target, 0.28F);
+        popupAnimationProgress = progress;
+        if (popupClosing && progress <= 0.01F) {
+            popupModule = null;
+            selectedModule = null;
+            popupClosing = false;
+            popupScroll = 0;
             return;
         }
 
-        float selected = moduleSelectAnimations.getOrDefault(module, 1.0F);
-        drawGlowRect(context, layout.settingsX + 10, layout.settingsY + 10, 28, 28, 9, withAlpha(ACCENT, (int) (42 + 35 * selected)), 2);
-        drawModuleIcon(context, module, layout.settingsX + 12, layout.settingsY + 12, 24);
+        Module module = popupModule;
+        popupW = Math.min(230, Math.max(190, layout.w / 3));
+        popupH = Math.min(layout.moduleH - 14, Math.max(150, module.getSettings().size() * (SETTING_HEIGHT + 6) + 56));
+        popupX = clamp(popupX, layout.x + 8, layout.x + layout.w - popupW - 8);
+        popupY = clamp(popupY, layout.y + 8, layout.y + layout.h - popupH - 34);
+        int alpha = (int) (235 * easeOutCubic(progress));
+        int slide = Math.round(6 * (1.0F - easeOutCubic(progress)));
+        int x = popupX + slide;
+        int y = popupY;
 
-        drawText(context, trimToWidth(module.getDisplayName(), layout.settingsW - 92), layout.settingsX + 44, layout.settingsY + 11, TEXT, false);
-        drawSmallText(context, trimToWidth(module.getDescription(), layout.settingsW - 96, 8.0F),
-                layout.settingsX + 44, layout.settingsY + 26, TEXT_MUTED);
-        drawToggle(context, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18,
-                moduleToggleAnimations.getOrDefault(module, module.isEnabled() ? 1.0F : 0.0F), true);
+        RenderUtils.drawRoundedRect(context, x, y, popupW, popupH, 10, withAlpha(0xFF191D29, alpha));
+        RenderUtils.drawRoundedRect(context, x + 2, y + 2, popupW - 4, popupH - 4, 8, withAlpha(0xFF202432, alpha));
+        drawText(context, trimToWidth(module.getName(), popupW - 72), x + 12, y + 13, withAlpha(TEXT, alpha), false);
+        drawToggle(context, x + popupW - 42, y + 12,
+                moduleToggleAnimations.getOrDefault(module, module.isEnabled() ? 1.0F : 0.0F), false);
 
-        drawSettingsTabs(context, layout);
-
-        int listX = layout.settingsX + 8;
-        int listY = layout.settingsY + 76;
-        int listW = layout.settingsW - 16;
-        int listH = layout.settingsH - 84;
+        int listX = x + 8;
+        int listY = y + 40;
+        int listW = popupW - 16;
+        int listH = popupH - 48;
         pushScissor(context, listX - 2, listY, listW + 4, listH);
-
-        List<Setting> settings = module.getSettings();
-        if (settings.isEmpty()) {
-            drawText(context, "No settings available.", listX + 4, listY + 8, TEXT_MUTED, false);
+        if (module.getSettings().isEmpty()) {
+            drawText(context, "No settings", listX + 4, listY + 8, withAlpha(TEXT_MUTED, alpha), false);
         } else {
-            double rowY = listY - settingsScroll;
-            for (Setting setting : settings) {
+            double rowY = listY - popupScroll;
+            for (Setting setting : module.getSettings()) {
                 if (rowY + SETTING_HEIGHT >= listY && rowY <= listY + listH) {
                     drawSettingRow(context, module, setting, listX, (int) Math.round(rowY), listW, mouseX, mouseY);
                 } else {
                     animate(settingHoverAnimations, setting, 0.0F, 0.16F);
                 }
-                rowY += SETTING_HEIGHT + 8;
+                rowY += SETTING_HEIGHT + 6;
             }
         }
-
         popScissor(context);
     }
 
@@ -595,26 +632,40 @@ public final class ClickGui extends Screen {
     private void drawProfilePanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
         drawSoftPanel(context, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH, 15);
         drawText(context, "Profiles", layout.moduleX + 16, layout.moduleY + 15, TEXT, false);
+        ProfileManager manager = MotionBlurrClient.INSTANCE.getProfileManager();
+        String activeProfile = manager.getActiveProfile();
+        if (manager.isDirty()) {
+            drawText(context, "Unsaved changes", layout.moduleX + layout.moduleW - 108, layout.moduleY + 15, ACCENT, false);
+        }
 
         int inputX = layout.moduleX + 14;
         int inputY = layout.moduleY + 42;
-        int inputW = layout.moduleW - 82;
-        drawInput(context, inputX, inputY, inputW, 30, profileInput, "Profile name", profileFocused);
-        drawPill(context, layout.moduleX + layout.moduleW - 58, inputY, 44, 30, "+", true);
+        int inputW = layout.moduleW - 64;
+        drawInput(context, inputX, inputY, inputW, 26, profileInput, "Import path", profileFocused);
+        drawPill(context, layout.moduleX + layout.moduleW - 42, inputY, 28, 26, "+", true);
 
-        int y = inputY + 44;
+        int buttonY = inputY + 34;
+        int buttonW = Math.max(46, (layout.moduleW - 44) / 4);
+        drawPill(context, layout.moduleX + 14, buttonY, buttonW, 24, "Save", true);
+        drawPill(context, layout.moduleX + 18 + buttonW, buttonY, buttonW, 24, "Load", true);
+        drawPill(context, layout.moduleX + 22 + buttonW * 2, buttonY, buttonW, 24, "Import", true);
+        drawPill(context, layout.moduleX + 26 + buttonW * 3, buttonY, buttonW, 24, confirmDeleteProfile ? "Confirm" : "Delete", true);
+
+        int y = inputY + 68;
         for (String profile : getProfiles()) {
             boolean active = profile.equalsIgnoreCase(activeProfile);
+            boolean selected = profile.equalsIgnoreCase(selectedProfile);
             boolean hovered = isHovered(mouseX, mouseY, layout.moduleX + 14, y, layout.moduleW - 28, 34);
             float hover = animate(stringHoverAnimations, "profile:" + profile, hovered ? 1.0F : 0.0F, 0.16F);
-            RenderUtils.drawRoundedRect(context, layout.moduleX + 14, y, layout.moduleW - 28, 34, 10, lerpColor(ROW, ROW_HOVER, Math.max(hover, active ? 0.65F : 0.0F)));
-            if (active) {
-                drawBorder(context, layout.moduleX + 14, y, layout.moduleW - 28, 34, 10, withAlpha(ACCENT, 150));
-            }
+            float fill = Math.max(hover, active ? 0.75F : selected ? 0.45F : 0.0F);
+            RenderUtils.drawRoundedRect(context, layout.moduleX + 14, y, layout.moduleW - 28, 30, 8, lerpColor(ROW, active ? withAlpha(ACCENT, 120) : ROW_HOVER, fill));
             drawText(context, profile, layout.moduleX + 26, y + 13, active ? TEXT : TEXT_SOFT, false);
-            drawText(context, active ? "active" : "load", layout.moduleX + layout.moduleW - 58, y + 13, active ? ACCENT : TEXT_DIM, false);
-            y += 40;
+            drawText(context, active ? "active" : selected ? "selected" : "", layout.moduleX + layout.moduleW - 66, y + 13, active ? TEXT : TEXT_DIM, false);
+            y += 35;
             if (y > layout.moduleY + layout.moduleH - 36) break;
+        }
+        if (statusMessageUntil > System.currentTimeMillis()) {
+            drawText(context, trimToWidth(statusMessage, layout.moduleW - 28), layout.moduleX + 16, layout.moduleY + layout.moduleH - 18, TEXT_MUTED, false);
         }
     }
 
@@ -638,6 +689,24 @@ public final class ClickGui extends Screen {
             RenderUtils.drawRoundedRect(context, layout.settingsX + layout.settingsW - 42, y + 8, 20, 14, 5, preset.color);
             y += 34;
             if (y > layout.settingsY + layout.settingsH - 40) break;
+        }
+    }
+
+    private void drawProfileCreateModal(DrawContext context, Layout layout, int mouseX, int mouseY) {
+        if (!profileCreateModal) return;
+        drawRect(context, 0, 0, width, height, 0x66000000);
+        int modalW = Math.min(260, Math.max(220, layout.w - 80));
+        int modalH = 116;
+        int modalX = layout.x + (layout.w - modalW) / 2;
+        int modalY = layout.y + (layout.h - modalH) / 2;
+        RenderUtils.drawRoundedRect(context, modalX, modalY, modalW, modalH, 10, 0xF2202430);
+        RenderUtils.drawRoundedRect(context, modalX + 2, modalY + 2, modalW - 4, modalH - 4, 8, 0xF2282C3A);
+        drawText(context, "Create profile", modalX + 14, modalY + 14, TEXT, false);
+        drawInput(context, modalX + 14, modalY + 40, modalW - 28, 28, modalProfileInput, "Profile name", profileCreateFocused);
+        drawPill(context, modalX + modalW - 128, modalY + 78, 54, 24, "Cancel", false);
+        drawPill(context, modalX + modalW - 68, modalY + 78, 54, 24, "Create", true);
+        if (statusMessageUntil > System.currentTimeMillis()) {
+            drawText(context, trimToWidth(statusMessage, modalW - 28), modalX + 14, modalY + 84, RED, false);
         }
     }
 
@@ -736,9 +805,8 @@ public final class ClickGui extends Screen {
     }
 
     private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size) {
-        drawGlowRect(context, x, y, size, size, 10, withAlpha(ACCENT, 30), 2);
-        RenderUtils.drawRoundedRect(context, x, y, size, size, 10, 0x661D1534);
-        RenderUtils.drawRoundedRect(context, x + 8, y + 7, 8, 10, 4, ACCENT);
+        RenderUtils.drawRoundedRect(context, x, y, size, size, Math.max(4, size / 3), 0x66202634);
+        RenderUtils.drawRoundedRect(context, x + size / 3, y + size / 3, Math.max(5, size / 3), Math.max(5, size / 3), 3, ACCENT);
     }
 
     private void drawCategoryMark(DrawContext context, int x, int y, boolean selected, float hover) {
@@ -785,8 +853,13 @@ public final class ClickGui extends Screen {
 
         if (listeningKeybind != null) {
             listeningKeybind.setKeyCode(-100 - button);
+            markProfileDirty();
             stopListening();
             return true;
+        }
+
+        if (profileCreateModal) {
+            return handleProfileCreateModalClick(mouseX, mouseY, button, layout);
         }
 
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
@@ -821,47 +894,62 @@ public final class ClickGui extends Screen {
             return handleConfigClick(mouseX, mouseY, button, layout) || super.mouseClicked(mouseX, mouseY, button);
         }
 
+        SettingRow settingRow = findSettingRowAt(mouseX, mouseY, layout);
+        if (settingRow != null && popupModule != null) {
+            if (settingRow.setting instanceof NumberSetting numberSetting) {
+                SliderBounds bounds = getSliderBounds(settingRow.x, settingRow.y, settingRow.width);
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
+                        && isHovered(mouseX, mouseY, bounds.x - 4, bounds.y - 5, bounds.width + 8, bounds.height + 10)
+                        && popupAnimationProgress > 0.75F) {
+                    draggingNumberSetting = numberSetting;
+                    draggingSliderX = bounds.x;
+                    draggingSliderWidth = bounds.width;
+                    updateDraggedNumber(mouseX);
+                    markProfileDirty();
+                }
+                return true;
+            }
+            if (settingRow.setting instanceof BooleanSetting
+                    && !isHovered(mouseX, mouseY, settingRow.x + settingRow.width - 36, settingRow.y + 10, 28, 13)) {
+                return true;
+            }
+            handleSettingClick(settingRow.setting, button);
+            markProfileDirty();
+            return true;
+        }
+
+        if (popupModule != null && isHovered(mouseX, mouseY, popupX + popupW - 42, popupY + 12, 28, 13)
+                && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            popupModule.toggle();
+            markProfileDirty();
+            return true;
+        }
+
         Module module = findModuleAt(mouseX, mouseY, layout);
         if (module != null) {
             selectedModule = module;
-            settingsScroll = 0;
-            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && isModuleFavoriteHovered(mouseX, mouseY, module, layout)) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+                if (popupModule == module && !popupClosing) {
+                    closeSettingsPopup();
+                } else {
+                    openSettingsPopup(module, mouseX, mouseY, layout);
+                }
+            } else if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && isModuleFavoriteHovered(mouseX, mouseY, module, layout)) {
                 if (favorites.contains(module)) {
                     favorites.remove(module);
                 } else {
                     favorites.add(module);
                 }
+                markProfileDirty();
             } else if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && isModuleToggleHovered(mouseX, mouseY, module, layout)) {
                 module.toggle();
+                markProfileDirty();
             }
             return true;
         }
 
-        SettingRow settingRow = findSettingRowAt(mouseX, mouseY, layout);
-        if (settingRow != null && selectedModule != null) {
-            if (settingRow.setting instanceof NumberSetting numberSetting) {
-                SliderBounds bounds = getSliderBounds(settingRow.x, settingRow.y, settingRow.width);
-                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT
-                        && isHovered(mouseX, mouseY, bounds.x - 4, bounds.y - 5, bounds.width + 8, bounds.height + 10)) {
-                    draggingNumberSetting = numberSetting;
-                    draggingSliderX = bounds.x;
-                    draggingSliderWidth = bounds.width;
-                    updateDraggedNumber(mouseX);
-                    return true;
-                }
-                return true;
-            }
-            if (settingRow.setting instanceof BooleanSetting
-                    && !isHovered(mouseX, mouseY, settingRow.x + settingRow.width - 36, settingRow.y + 13, 28, 13)) {
-                return true;
-            }
-            handleSettingClick(settingRow.setting, button);
-            return true;
-        }
-
-        if (selectedModule != null && isHovered(mouseX, mouseY, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18, 32, 15)
-                && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            selectedModule.toggle();
+        if (popupModule != null && !isHovered(mouseX, mouseY, popupX, popupY, popupW, popupH)) {
+            closeSettingsPopup();
             return true;
         }
 
@@ -872,6 +960,7 @@ public final class ClickGui extends Screen {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && draggingNumberSetting != null) {
             updateDraggedNumber(mouseX);
+            markProfileDirty();
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
@@ -919,7 +1008,7 @@ public final class ClickGui extends Screen {
                     selectedModule = null;
                 }
                 moduleScroll = 0;
-                settingsScroll = 0;
+                closeSettingsPopup();
                 stopListening();
                 return true;
             }
@@ -931,7 +1020,7 @@ public final class ClickGui extends Screen {
             viewMode = ViewMode.FAVORITES;
             selectedModule = null;
             moduleScroll = 0;
-            settingsScroll = 0;
+            closeSettingsPopup();
             stopListening();
             return true;
         }
@@ -941,7 +1030,7 @@ public final class ClickGui extends Screen {
             viewMode = ViewMode.FRIENDS;
             selectedModule = null;
             moduleScroll = 0;
-            settingsScroll = 0;
+            closeSettingsPopup();
             stopListening();
             return true;
         }
@@ -951,7 +1040,7 @@ public final class ClickGui extends Screen {
             viewMode = ViewMode.SETTINGS;
             selectedModule = null;
             moduleScroll = 0;
-            settingsScroll = 0;
+            closeSettingsPopup();
             stopListening();
             return true;
         }
@@ -960,24 +1049,58 @@ public final class ClickGui extends Screen {
 
     private boolean handleConfigClick(double mouseX, double mouseY, int button, Layout layout) {
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-        if (isHovered(mouseX, mouseY, layout.moduleX + layout.moduleW - 58, layout.moduleY + 42, 44, 30)) {
-            saveProfile(profileInput.isBlank() ? "profile" : profileInput.trim());
+        if (isHovered(mouseX, mouseY, layout.moduleX + layout.moduleW - 42, layout.moduleY + 42, 28, 26)) {
+            openProfileCreateModal();
             return true;
         }
 
-        int y = layout.moduleY + 86;
+        int buttonY = layout.moduleY + 76;
+        int buttonW = Math.max(46, (layout.moduleW - 44) / 4);
+        if (isHovered(mouseX, mouseY, layout.moduleX + 14, buttonY, buttonW, 24)) {
+            saveProfile(selectedProfile);
+            return true;
+        }
+        if (isHovered(mouseX, mouseY, layout.moduleX + 18 + buttonW, buttonY, buttonW, 24)) {
+            loadProfile(selectedProfile);
+            return true;
+        }
+        if (isHovered(mouseX, mouseY, layout.moduleX + 22 + buttonW * 2, buttonY, buttonW, 24)) {
+            if (MotionBlurrClient.INSTANCE.getProfileManager().importProfile(profileInput)) {
+                selectedProfile = MotionBlurrClient.INSTANCE.getProfileManager().getActiveProfile();
+                profileInput = "";
+                showStatus("Imported profile");
+            } else {
+                showStatus("Import failed");
+            }
+            return true;
+        }
+        if (isHovered(mouseX, mouseY, layout.moduleX + 26 + buttonW * 3, buttonY, buttonW, 24)) {
+            if (!confirmDeleteProfile) {
+                confirmDeleteProfile = true;
+                showStatus("Click Confirm to delete");
+            } else if (MotionBlurrClient.INSTANCE.getProfileManager().deleteProfile(selectedProfile)) {
+                selectedProfile = MotionBlurrClient.INSTANCE.getProfileManager().getActiveProfile();
+                confirmDeleteProfile = false;
+                showStatus("Deleted profile");
+            }
+            return true;
+        }
+
+        int y = layout.moduleY + 110;
         for (String profile : getProfiles()) {
             if (isHovered(mouseX, mouseY, layout.moduleX + 14, y, layout.moduleW - 28, 34)) {
-                loadProfile(profile);
+                selectedProfile = profile;
+                confirmDeleteProfile = false;
                 return true;
             }
-            y += 40;
+            y += 35;
         }
 
         y = layout.settingsY + 62;
         for (GuiSize size : GuiSize.values()) {
             if (isHovered(mouseX, mouseY, layout.settingsX + 14, y, layout.settingsW - 28, 28)) {
                 guiSize = size;
+                markProfileDirty();
                 return true;
             }
             y += 34;
@@ -989,6 +1112,7 @@ public final class ClickGui extends Screen {
                 accentPreset = preset;
                 ACCENT = preset.color;
                 ACCENT_2 = preset.secondary;
+                markProfileDirty();
                 return true;
             }
             y += 34;
@@ -1015,6 +1139,96 @@ public final class ClickGui extends Screen {
             y += 40;
         }
         return false;
+    }
+
+    private boolean handleProfileCreateModalClick(double mouseX, double mouseY, int button, Layout layout) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return true;
+        int modalW = Math.min(260, Math.max(220, layout.w - 80));
+        int modalH = 116;
+        int modalX = layout.x + (layout.w - modalW) / 2;
+        int modalY = layout.y + (layout.h - modalH) / 2;
+        profileCreateFocused = isHovered(mouseX, mouseY, modalX + 14, modalY + 40, modalW - 28, 28);
+        if (isHovered(mouseX, mouseY, modalX + modalW - 128, modalY + 78, 54, 24)) {
+            closeProfileCreateModal(false);
+            return true;
+        }
+        if (isHovered(mouseX, mouseY, modalX + modalW - 68, modalY + 78, 54, 24)) {
+            createProfileFromModal();
+            return true;
+        }
+        if (!isHovered(mouseX, mouseY, modalX, modalY, modalW, modalH) && modalProfileInput.isBlank()) {
+            closeProfileCreateModal(false);
+        }
+        return true;
+    }
+
+    private void openProfileCreateModal() {
+        profileCreateModal = true;
+        profileCreateFocused = true;
+        modalProfileInput = "";
+        searchFocused = false;
+        profileFocused = false;
+        friendFocused = false;
+    }
+
+    private void closeProfileCreateModal(boolean keepTypedText) {
+        profileCreateModal = false;
+        profileCreateFocused = false;
+        if (!keepTypedText) {
+            modalProfileInput = "";
+        }
+    }
+
+    private void createProfileFromModal() {
+        ProfileManager manager = MotionBlurrClient.INSTANCE.getProfileManager();
+        if (!manager.isValidProfileName(modalProfileInput)) {
+            showStatus("Invalid profile name");
+            return;
+        }
+        if (manager.profileExists(modalProfileInput)) {
+            showStatus("Profile already exists");
+            return;
+        }
+        if (manager.createProfile(modalProfileInput)) {
+            selectedProfile = manager.getActiveProfile();
+            closeProfileCreateModal(false);
+            showStatus("Profile created");
+        } else {
+            showStatus("Profile creation failed");
+        }
+    }
+
+    private void openSettingsPopup(Module module, double mouseX, double mouseY, Layout layout) {
+        popupModule = module;
+        selectedModule = module;
+        popupClosing = false;
+        popupAnimationProgress = 0.0F;
+        popupScroll = 0;
+        popupW = Math.min(230, Math.max(190, layout.w / 3));
+        popupH = Math.min(layout.moduleH - 14, Math.max(150, module.getSettings().size() * (SETTING_HEIGHT + 6) + 56));
+        int preferredX = (int) mouseX + 10;
+        if (preferredX + popupW > layout.x + layout.w - 8) {
+            preferredX = (int) mouseX - popupW - 10;
+        }
+        popupX = clamp(preferredX, layout.x + 8, layout.x + layout.w - popupW - 8);
+        popupY = clamp((int) mouseY - 16, layout.y + 8, layout.y + layout.h - popupH - 34);
+        popupAnimationStart = System.currentTimeMillis();
+    }
+
+    private void closeSettingsPopup() {
+        if (popupModule == null) return;
+        popupClosing = true;
+        popupAnimationStart = System.currentTimeMillis();
+        stopListening();
+    }
+
+    private void showStatus(String message) {
+        statusMessage = message == null ? "" : message;
+        statusMessageUntil = System.currentTimeMillis() + 2200L;
+    }
+
+    private void markProfileDirty() {
+        MotionBlurrClient.INSTANCE.getProfileManager().markDirty();
     }
 
     private void handleSettingClick(Setting setting, int button) {
@@ -1068,9 +1282,8 @@ public final class ClickGui extends Screen {
 
         for (Module current : getFilteredModules()) {
             if (current == module) {
-                float hover = moduleHoverAnimations.getOrDefault(current, 0.0F);
-                int drawY = (int) Math.round(currentY) - Math.round(2 * easeOutCubic(hover));
-                return isHovered(mouseX, mouseY, listX + listW - 58, drawY + 13, 28, 13);
+                int drawY = (int) Math.round(currentY);
+                return isHovered(mouseX, mouseY, listX + listW - 58, drawY + 8, 28, 13);
             }
             currentY += CARD_HEIGHT + GAP;
         }
@@ -1085,7 +1298,7 @@ public final class ClickGui extends Screen {
 
         for (Module current : getFilteredModules()) {
             if (current == module) {
-                return isHovered(mouseX, mouseY, listX + listW - 24, currentY + 6, 22, 24);
+                return isHovered(mouseX, mouseY, listX + listW - 24, currentY + 4, 22, 20);
             }
             currentY += CARD_HEIGHT + GAP;
         }
@@ -1093,24 +1306,24 @@ public final class ClickGui extends Screen {
     }
 
     private SettingRow findSettingRowAt(double mouseX, double mouseY, Layout layout) {
-        if (selectedModule == null || !isHovered(mouseX, mouseY, layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH)) {
+        if (popupModule == null || popupClosing || !isHovered(mouseX, mouseY, popupX, popupY, popupW, popupH)) {
             return null;
         }
 
-        int listX = layout.settingsX + 8;
-        int listY = layout.settingsY + 76;
-        int listW = layout.settingsW - 16;
-        int listH = layout.settingsH - 84;
+        int listX = popupX + 8;
+        int listY = popupY + 40;
+        int listW = popupW - 16;
+        int listH = popupH - 48;
         if (!isHovered(mouseX, mouseY, listX, listY, listW, listH)) {
             return null;
         }
 
-        double rowY = listY - settingsScroll;
-        for (Setting setting : selectedModule.getSettings()) {
+        double rowY = listY - popupScroll;
+        for (Setting setting : popupModule.getSettings()) {
             if (isHovered(mouseX, mouseY, listX, rowY, listW, SETTING_HEIGHT)) {
                 return new SettingRow(setting, listX, (int) Math.round(rowY), listW);
             }
-            rowY += SETTING_HEIGHT + 8;
+            rowY += SETTING_HEIGHT + 6;
         }
         return null;
     }
@@ -1144,9 +1357,8 @@ public final class ClickGui extends Screen {
         List<Module> filtered = new ArrayList<>();
         for (Module module : modules) {
             String name = module.getName() == null ? "" : module.getName().toLowerCase(Locale.ROOT);
-            String display = module.getDisplayName() == null ? "" : module.getDisplayName().toLowerCase(Locale.ROOT);
             String description = module.getDescription() == null ? "" : module.getDescription().toLowerCase(Locale.ROOT);
-            if (name.contains(query) || display.contains(query) || description.contains(query)) {
+            if (name.contains(query) || description.contains(query)) {
                 filtered.add(module);
             }
         }
@@ -1163,7 +1375,6 @@ public final class ClickGui extends Screen {
             return;
         }
         selectedModule = visible.isEmpty() ? null : visible.get(0);
-        settingsScroll = 0;
     }
 
     private void clampScrolls() {
@@ -1171,8 +1382,8 @@ public final class ClickGui extends Screen {
         int moduleContent = Math.max(0, getFilteredModules().size() * (CARD_HEIGHT + GAP) - GAP);
         moduleScroll = clamp(moduleScroll, 0.0D, Math.max(0, moduleContent - (layout.moduleH - 38)));
 
-        int settingContent = selectedModule == null ? 0 : Math.max(0, selectedModule.getSettings().size() * (SETTING_HEIGHT + 8) - 8);
-        settingsScroll = clamp(settingsScroll, 0.0D, Math.max(0, settingContent - (layout.settingsH - 84)));
+        int settingContent = popupModule == null ? 0 : Math.max(0, popupModule.getSettings().size() * (SETTING_HEIGHT + 6) - 6);
+        popupScroll = clamp(popupScroll, 0.0D, Math.max(0, settingContent - Math.max(1, popupH - 48)));
     }
 
     private Layout getLayout() {
@@ -1198,9 +1409,9 @@ public final class ClickGui extends Screen {
 
         int bodyY = topY + topH + gap;
         int bodyH = guiH - TOPBAR_HEIGHT - BOTTOMBAR_HEIGHT - gap - 18;
-        int settingsW = Math.max(170, Math.min(210, (int) (contentW * 0.45F)));
-        int moduleW = contentW - settingsW - gap;
-        if (moduleW < 160) {
+        int settingsW = viewMode == ViewMode.CATEGORY || viewMode == ViewMode.FAVORITES ? 0 : Math.max(170, Math.min(210, (int) (contentW * 0.45F)));
+        int moduleW = settingsW == 0 ? contentW : contentW - settingsW - gap;
+        if (settingsW > 0 && moduleW < 160) {
             settingsW = Math.max(165, contentW - gap - 160);
             moduleW = Math.max(145, contentW - settingsW - gap);
         }
@@ -1224,35 +1435,23 @@ public final class ClickGui extends Screen {
     }
 
     private List<String> getProfiles() {
-        List<String> profiles = new ArrayList<>();
-        ProfileManager manager = MotionBlurrClient.INSTANCE.getProfileManager();
-        File dir = manager.getProfileDir();
-        File[] files = dir.listFiles((file, name) -> name.endsWith(".json"));
-        if (files != null) {
-            for (File file : files) {
-                String name = file.getName();
-                profiles.add(name.substring(0, name.length() - 5));
-            }
-        }
-        if (profiles.isEmpty()) {
-            profiles.add("default");
-        }
-        profiles.sort(String.CASE_INSENSITIVE_ORDER);
-        return profiles;
+        return MotionBlurrClient.INSTANCE.getProfileManager().listProfiles();
     }
 
     private void saveProfile(String profile) {
         if (profile == null || profile.isBlank()) return;
-        activeProfile = profile.trim();
-        profileInput = activeProfile;
-        MotionBlurrClient.INSTANCE.getProfileManager().saveProfile(activeProfile, true);
+        if (MotionBlurrClient.INSTANCE.getProfileManager().saveProfile(profile.trim(), true)) {
+            selectedProfile = MotionBlurrClient.INSTANCE.getProfileManager().getActiveProfile();
+            showStatus("Profile saved");
+        }
     }
 
     private void loadProfile(String profile) {
         if (profile == null || profile.isBlank()) return;
-        activeProfile = profile.trim();
-        profileInput = activeProfile;
-        MotionBlurrClient.INSTANCE.getProfileManager().loadProfile(activeProfile);
+        if (MotionBlurrClient.INSTANCE.getProfileManager().loadProfile(profile.trim())) {
+            selectedProfile = MotionBlurrClient.INSTANCE.getProfileManager().getActiveProfile();
+            showStatus("Profile loaded");
+        }
     }
 
     private List<String> getFriendRows() {
@@ -1273,11 +1472,7 @@ public final class ClickGui extends Screen {
     }
 
     private void drawGlowRect(DrawContext context, int x, int y, int w, int h, int radius, int color, int layers) {
-        int alpha = (color >>> 24) & 255;
-        for (int i = layers; i >= 1; i--) {
-            int layerAlpha = (int) (alpha * (i / (float) layers) * 0.22F);
-            RenderUtils.drawRoundedRect(context, x - i, y - i, w + i * 2, h + i * 2, radius + i, withAlpha(color, layerAlpha));
-        }
+        // Intentionally flat: glow effects were removed from the minimalist NanoVG redesign.
     }
 
     private void drawCornerGlow(DrawContext context, int x, int y, int w, int h) {
@@ -1288,7 +1483,6 @@ public final class ClickGui extends Screen {
     }
 
     private void drawSoftPanel(DrawContext context, int x, int y, int w, int h, int radius) {
-        drawGlowRect(context, x, y, w, h, radius, withAlpha(ACCENT, 15), 3);
         RenderUtils.drawRoundedRect(context, x, y, w, h, radius, GLASS);
         RenderUtils.drawRoundedRect(context, x + 3, y + 3, w - 6, h - 6, Math.max(1, radius - 3), 0xF01B1E29);
     }
