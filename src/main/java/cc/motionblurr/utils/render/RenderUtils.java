@@ -1,5 +1,6 @@
 package cc.motionblurr.utils.render;
 
+import cc.motionblurr.gui.nanovg.NanoVGRenderer;
 import cc.motionblurr.MotionBlurrClient;
 import cc.motionblurr.utils.render.font.fonts.FontRenderer;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -152,6 +153,11 @@ public final class RenderUtils {
 
     public static void drawRoundedRect(DrawContext context, int x, int y, int width, int height, int radius, int color) {
         if (width <= 0 || height <= 0 || ((color >>> 24) & 255) == 0) {
+            return;
+        }
+        NanoVGRenderer nanoVG = NanoVGRenderer.getInstance();
+        if (nanoVG.isInFrame()) {
+            nanoVG.roundedRect(x, y, width, height, radius, color);
             return;
         }
         // Guaranteed VulkanMod-safe GUI fallback. The previous smooth path

@@ -15,6 +15,7 @@ import cc.motionblurr.profiles.ProfileManager;
 import cc.motionblurr.utils.friend.FriendManager;
 import cc.motionblurr.utils.keybinding.KeyUtils;
 import cc.motionblurr.utils.render.RenderUtils;
+import cc.motionblurr.gui.nanovg.NanoVGRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -32,7 +33,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class ClickGui extends Screen {
-    private final ClickGuiFont guiFont = new ClickGuiFont();
+    private static final boolean NANOVG_VALIDATION_MODE = false;
+    private final NanoVGRenderer nanoVG = NanoVGRenderer.getInstance();
     private static final int BACKDROP = 0xD9050610;
     private static final int WINDOW = 0xF2181A24;
     private static final int GLASS = 0xF21D202C;
@@ -88,6 +90,8 @@ public final class ClickGui extends Screen {
     private int draggingSliderWidth;
     private float searchFocusAnimation;
     private float pulseAnimation;
+    private long lastRenderNanos = System.nanoTime();
+    private float animationDeltaSeconds = 1.0F / 60.0F;
 
     public ClickGui() {
         super(Text.literal("MotionBlurr"));
@@ -126,6 +130,12 @@ public final class ClickGui extends Screen {
         }
 
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (searchFocused || profileFocused || friendFocused) {
+                searchFocused = false;
+                profileFocused = false;
+                friendFocused = false;
+                return true;
+            }
             close();
             return true;
         }
@@ -192,14 +202,37 @@ public final class ClickGui extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        guiFont.initializeIfReady();
-        pulseAnimation += Math.max(0.3F, delta) * 0.035F;
+        long now = System.nanoTime();
+        animationDeltaSeconds = clamp((now - lastRenderNanos) / 1_000_000_000.0F, 1.0F / 240.0F, 0.1F);
+        lastRenderNanos = now;
+        pulseAnimation += animationDeltaSeconds * 2.1F;
         searchFocusAnimation = animate(searchFocusAnimation, searchFocused ? 1.0F : 0.0F, 0.18F);
 
         Layout layout = getLayout();
         ensureSelectedModule();
         clampScrolls();
 
+        boolean nanoFrame = nanoVG.beginFrame(width, height);
+        try {
+            if (nanoFrame && NANOVG_VALIDATION_MODE) {
+                drawNanoVGValidation(layout);
+            } else {
+                renderGuiContents(context, layout, mouseX, mouseY);
+            }
+        } catch (Throwable failure) {
+            if (nanoFrame) {
+                nanoVG.disableAfterRenderFailure(failure);
+                nanoFrame = false;
+                renderGuiContents(context, layout, mouseX, mouseY);
+            } else {
+                throw failure;
+            }
+        } finally {
+            if (nanoFrame) nanoVG.endFrame();
+        }
+    }
+
+    private void renderGuiContents(DrawContext context, Layout layout, int mouseX, int mouseY) {
         drawBackdrop(context);
         drawWindow(context, layout);
         drawSidebar(context, layout, mouseX, mouseY);
@@ -207,18 +240,40 @@ public final class ClickGui extends Screen {
         if (viewMode == ViewMode.CONFIG) {
             drawProfilePanel(context, layout, mouseX, mouseY);
             drawCustomizationPanel(context, layout, mouseX, mouseY);
-        } else if (viewMode == ViewMode.FRIENDS) {
-            drawFriendPanel(context, layout, mouseX, mouseY);
-            drawFriendHelpPanel(context, layout);
-        } else {
+                } else if (viewMode == ViewMode.FRIENDS) {
+                    drawFriendPanel(context, layout, mouseX, mouseY);
+                    drawFriendHelpPanel(context, layout);
+                } else if (viewMode == ViewMode.SETTINGS) {
+                    drawGuiSettingsPage(context, layout, mouseX, mouseY);
+                } else {
             drawModulePanel(context, layout, mouseX, mouseY);
             drawSettingsPanel(context, layout, mouseX, mouseY);
         }
         drawBottomBar(context, layout, mouseX, mouseY);
     }
 
+    private void drawNanoVGValidation(Layout layout) {
+        float x = layout.x + 120;
+        float y = layout.y + 75;
+        nanoVG.shadow(x, y, 330, 150, 14, 0x55200040, 18);
+        nanoVG.roundedRect(x, y, 330, 150, 14, WINDOW);
+        nanoVG.text("MotionBlurr", x + 18, y + 16, 18, TEXT);
+        drawNanoToggle(x + 24, y + 60, true);
+        drawNanoToggle(x + 24, y + 88, false);
+        nanoVG.roundedRect(x + 105, y + 76, 150, 5, 3, 0xFF30354A);
+        nanoVG.roundedRect(x + 105, y + 76, 88, 5, 3, ACCENT);
+        nanoVG.circle(x + 193, y + 78.5F, 5, TEXT);
+        nanoVG.roundedRect(x + 275, y + 14, 35, 24, 8, 0xCC252A42);
+        nanoVG.centeredText("X", x + 292.5F, y + 20, 10, TEXT);
+    }
+
+    private void drawNanoToggle(float x, float y, boolean enabled) {
+        nanoVG.roundedRect(x, y, 30, 14, 7, enabled ? ACCENT : 0xFF30354A);
+        nanoVG.circle(x + (enabled ? 23 : 7), y + 7, 5, TEXT);
+    }
+
     private void drawBackdrop(DrawContext context) {
-        context.fill(0, 0, width, height, BACKDROP);
+        drawRect(context, 0, 0, width, height, BACKDROP);
         drawGlowRect(context, width / 2 - 180, height / 2 - 130, 360, 260, 28, withAlpha(ACCENT, 26), 5);
     }
 
@@ -268,7 +323,8 @@ public final class ClickGui extends Screen {
 
         itemY += 2;
         itemY = drawSidebarAction(context, "Favorites", "*", viewMode == ViewMode.FAVORITES, itemX, itemY, itemW, itemH, mouseX, mouseY);
-        drawSidebarAction(context, "Friends", "+", viewMode == ViewMode.FRIENDS, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        itemY = drawSidebarAction(context, "Friends", "+", viewMode == ViewMode.FRIENDS, itemX, itemY, itemW, itemH, mouseX, mouseY);
+        drawSidebarAction(context, "Settings", "S", viewMode == ViewMode.SETTINGS, itemX, itemY, itemW, itemH, mouseX, mouseY);
 
         if (layout.sidebarH > 330) {
             int infoY = layout.sidebarY + layout.sidebarH - 66;
@@ -347,7 +403,7 @@ public final class ClickGui extends Screen {
         int listY = layout.moduleY + 30;
         int listW = layout.moduleW - 16;
         int listH = layout.moduleH - 38;
-        context.enableScissor(listX - 4, listY, listX + listW + 4, listY + listH);
+        pushScissor(context, listX - 4, listY, listW + 8, listH);
 
         double currentY = listY - moduleScroll;
         for (Module module : modules) {
@@ -364,7 +420,7 @@ public final class ClickGui extends Screen {
             drawText(context, "No modules found.", listX + 4, listY + 8, TEXT_MUTED, false);
         }
 
-        context.disableScissor();
+        popScissor(context);
         drawModuleScrollBar(context, layout, modules.size());
     }
 
@@ -394,7 +450,7 @@ public final class ClickGui extends Screen {
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
         String description = module.getDescription() == null ? "" : module.getDescription();
         if (w > 185) {
-            drawSmallText(context, trimToWidth(description, w - 122, ClickGuiFont.Size.SMALL), x + 38, drawY + 21, TEXT_MUTED);
+            drawSmallText(context, trimToWidth(description, w - 122, 8.0F), x + 38, drawY + 21, TEXT_MUTED);
         }
 
         boolean favorite = favorites.contains(module);
@@ -419,7 +475,7 @@ public final class ClickGui extends Screen {
         drawModuleIcon(context, module, layout.settingsX + 12, layout.settingsY + 12, 24);
 
         drawText(context, trimToWidth(module.getDisplayName(), layout.settingsW - 92), layout.settingsX + 44, layout.settingsY + 11, TEXT, false);
-        drawSmallText(context, trimToWidth(module.getDescription(), layout.settingsW - 96, ClickGuiFont.Size.SMALL),
+        drawSmallText(context, trimToWidth(module.getDescription(), layout.settingsW - 96, 8.0F),
                 layout.settingsX + 44, layout.settingsY + 26, TEXT_MUTED);
         drawToggle(context, layout.settingsX + layout.settingsW - 40, layout.settingsY + 18,
                 moduleToggleAnimations.getOrDefault(module, module.isEnabled() ? 1.0F : 0.0F), true);
@@ -430,7 +486,7 @@ public final class ClickGui extends Screen {
         int listY = layout.settingsY + 76;
         int listW = layout.settingsW - 16;
         int listH = layout.settingsH - 84;
-        context.enableScissor(listX - 2, listY, listX + listW + 2, listY + listH);
+        pushScissor(context, listX - 2, listY, listW + 4, listH);
 
         List<Setting> settings = module.getSettings();
         if (settings.isEmpty()) {
@@ -447,7 +503,7 @@ public final class ClickGui extends Screen {
             }
         }
 
-        context.disableScissor();
+        popScissor(context);
     }
 
     private void drawSettingRow(DrawContext context, Module module, Setting setting, int x, int y, int w, int mouseX, int mouseY) {
@@ -621,12 +677,24 @@ public final class ClickGui extends Screen {
         drawText(context, "in memory for GUI use.", layout.settingsX + 16, layout.settingsY + 76, TEXT_MUTED, false);
     }
 
+    private void drawGuiSettingsPage(DrawContext context, Layout layout, int mouseX, int mouseY) {
+        drawSoftPanel(context, layout.moduleX, layout.moduleY, layout.moduleW, layout.moduleH, 15);
+        drawText(context, "Settings", layout.moduleX + 16, layout.moduleY + 16, TEXT, false);
+        drawText(context, "Customize the ClickGUI.", layout.moduleX + 16, layout.moduleY + 42, TEXT_MUTED, false);
+        drawText(context, "Theme", layout.moduleX + 16, layout.moduleY + 76, TEXT_MUTED, false);
+        drawText(context, cc.motionblurr.module.modules.client.ClickGUIModule.theme.getMode(),
+                layout.moduleX + 16, layout.moduleY + 94, ACCENT, false);
+        drawText(context, "Animation speed follows real time.", layout.moduleX + 16,
+                layout.moduleY + 126, TEXT_MUTED, false);
+        drawCustomizationPanel(context, layout, mouseX, mouseY);
+    }
+
     private void drawSettingsTabs(DrawContext context, Layout layout) {
         String[] tabs = {"General", "Targets", "Weapon", "Rotation", "Render"};
         int x = layout.settingsX + 10;
         int y = layout.settingsY + 52;
         int maxRight = layout.settingsX + layout.settingsW - 10;
-        context.fill(layout.settingsX, y - 10, layout.settingsX + layout.settingsW, y - 9, 0x3330354A);
+        drawRect(context, layout.settingsX, y - 10, layout.settingsW, 1, 0x3330354A);
         for (int i = 0; i < tabs.length; i++) {
             String tab = tabs[i];
             int tabW = Math.max(38, textWidth(tab) + 10);
@@ -644,7 +712,7 @@ public final class ClickGui extends Screen {
     private void drawBottomBar(DrawContext context, Layout layout, int mouseX, int mouseY) {
         int y = layout.y + layout.h - BOTTOMBAR_HEIGHT;
         RenderUtils.drawRoundedRect(context, layout.x + 6, y, layout.w - 12, BOTTOMBAR_HEIGHT - 4, 9, 0xF21B1D29);
-        context.fill(layout.x + 1, y, layout.x + layout.w - 1, y + 1, 0x33464C65);
+        drawRect(context, layout.x + 1, y, layout.w - 2, 1, 0x33464C65);
         int x = layout.moduleX;
         drawBottomTab(context, "GUI", "[]", x, y + 5, 58, true, mouseX, mouseY);
         drawBottomTab(context, "ArrayList", "=", x + 64, y + 5, 82, false, mouseX, mouseY);
@@ -747,6 +815,10 @@ public final class ClickGui extends Screen {
 
         if (viewMode == ViewMode.FRIENDS) {
             return handleFriendClick(mouseX, mouseY, button, layout) || super.mouseClicked(mouseX, mouseY, button);
+        }
+
+        if (viewMode == ViewMode.SETTINGS) {
+            return handleConfigClick(mouseX, mouseY, button, layout) || super.mouseClicked(mouseX, mouseY, button);
         }
 
         Module module = findModuleAt(mouseX, mouseY, layout);
@@ -867,6 +939,16 @@ public final class ClickGui extends Screen {
 
         if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
             viewMode = ViewMode.FRIENDS;
+            selectedModule = null;
+            moduleScroll = 0;
+            settingsScroll = 0;
+            stopListening();
+            return true;
+        }
+        itemY += itemH + 4;
+
+        if (isHovered(mouseX, mouseY, itemX, itemY, itemW, itemH)) {
+            viewMode = ViewMode.SETTINGS;
             selectedModule = null;
             moduleScroll = 0;
             settingsScroll = 0;
@@ -1051,7 +1133,7 @@ public final class ClickGui extends Screen {
         List<Module> modules = viewMode == ViewMode.FAVORITES
                 ? new ArrayList<>(favorites)
                 : MotionBlurrClient.INSTANCE.getModuleManager().getModulesByCategory(selectedCategory);
-        if (viewMode == ViewMode.CONFIG || viewMode == ViewMode.FRIENDS) {
+        if (viewMode == ViewMode.CONFIG || viewMode == ViewMode.FRIENDS || viewMode == ViewMode.SETTINGS) {
             return List.of();
         }
         if (searchText.isBlank()) {
@@ -1072,7 +1154,7 @@ public final class ClickGui extends Screen {
     }
 
     private void ensureSelectedModule() {
-        if (viewMode == ViewMode.CONFIG || viewMode == ViewMode.FRIENDS) {
+        if (viewMode == ViewMode.CONFIG || viewMode == ViewMode.FRIENDS || viewMode == ViewMode.SETTINGS) {
             selectedModule = null;
             return;
         }
@@ -1224,28 +1306,61 @@ public final class ClickGui extends Screen {
     }
 
     private int drawText(DrawContext context, String text, float x, float y, int color, boolean shadow) {
-        return guiFont.draw(context, textRenderer, text, x, y, color, shadow, ClickGuiFont.Size.NORMAL);
+        if (nanoVG.isInFrame()) {
+            nanoVG.text(text, x, y, 9.0F, color);
+            return Math.round(x + nanoVG.textWidth(text, 9.0F));
+        }
+        return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, shadow);
     }
 
     private int drawTitleText(DrawContext context, String text, float x, float y, int color) {
-        return guiFont.draw(context, textRenderer, text, x, y, color, false, ClickGuiFont.Size.TITLE);
+        if (nanoVG.isInFrame()) {
+            nanoVG.text(text, x, y, 11.0F, color);
+            return Math.round(x + nanoVG.textWidth(text, 11.0F));
+        }
+        return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, false);
     }
 
     private int drawSmallText(DrawContext context, String text, float x, float y, int color) {
-        return guiFont.draw(context, textRenderer, text, x, y, color, false, ClickGuiFont.Size.SMALL);
+        if (nanoVG.isInFrame()) {
+            nanoVG.text(text, x, y, 8.0F, color);
+            return Math.round(x + nanoVG.textWidth(text, 8.0F));
+        }
+        return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, false);
     }
 
     private int drawCenteredText(DrawContext context, String text, float centerX, float y, int color) {
-        return guiFont.drawCentered(context, textRenderer, text, centerX, y, color, false,
-                ClickGuiFont.Size.NORMAL);
+        if (nanoVG.isInFrame()) {
+            nanoVG.centeredText(text, centerX, y, 9.0F, color);
+            return Math.round(centerX + nanoVG.textWidth(text, 9.0F) / 2.0F);
+        }
+        float x = centerX - textRenderer.getWidth(text) / 2.0F;
+        return context.drawText(textRenderer, text, Math.round(x), Math.round(y), color, false);
     }
 
     private int textWidth(String text) {
-        return guiFont.width(textRenderer, text, ClickGuiFont.Size.NORMAL);
+        if (nanoVG.isInFrame()) return Math.round(nanoVG.textWidth(text, 9.0F));
+        return textRenderer.getWidth(text);
     }
 
     private int fontHeight() {
-        return guiFont.height(textRenderer, ClickGuiFont.Size.NORMAL);
+        if (nanoVG.isInFrame()) return Math.round(nanoVG.fontHeight(9.0F));
+        return textRenderer.fontHeight;
+    }
+
+    private void drawRect(DrawContext context, float x, float y, float w, float h, int color) {
+        if (nanoVG.isInFrame()) nanoVG.rect(x, y, w, h, color);
+        else context.fill(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h), color);
+    }
+
+    private void pushScissor(DrawContext context, float x, float y, float w, float h) {
+        if (nanoVG.isInFrame()) nanoVG.pushScissor(x, y, w, h);
+        else context.enableScissor(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h));
+    }
+
+    private void popScissor(DrawContext context) {
+        if (nanoVG.isInFrame()) nanoVG.popScissor();
+        else context.disableScissor();
     }
 
     private boolean isLeftOrRight(int button) {
@@ -1257,19 +1372,24 @@ public final class ClickGui extends Screen {
     }
 
     private String trimToWidth(String text, int maxWidth) {
-        return trimToWidth(text, maxWidth, ClickGuiFont.Size.NORMAL);
+        return trimToWidth(text, maxWidth, 9.0F);
     }
 
-    private String trimToWidth(String text, int maxWidth, ClickGuiFont.Size size) {
+    private String trimToWidth(String text, int maxWidth, float fontSize) {
         if (text == null) return "";
-        if (guiFont.width(textRenderer, text, size) <= maxWidth) return text;
+        if (measureText(text, fontSize) <= maxWidth) return text;
         String ellipsis = "...";
-        int limit = Math.max(0, maxWidth - guiFont.width(textRenderer, ellipsis, size));
+        int limit = Math.max(0, maxWidth - measureText(ellipsis, fontSize));
         String trimmed = text;
-        while (!trimmed.isEmpty() && guiFont.width(textRenderer, trimmed, size) > limit) {
+        while (!trimmed.isEmpty() && measureText(trimmed, fontSize) > limit) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
         return trimmed + ellipsis;
+    }
+
+    private int measureText(String text, float fontSize) {
+        if (nanoVG.isInFrame()) return Math.round(nanoVG.textWidth(text, fontSize));
+        return textRenderer.getWidth(text);
     }
 
     private String format(double value) {
@@ -1280,7 +1400,9 @@ public final class ClickGui extends Screen {
     }
 
     private float animate(float current, float target, float speed) {
-        float next = current + (target - current) * clamp(speed, 0.0F, 1.0F);
+        float timeAdjustedSpeed = 1.0F - (float) Math.pow(1.0F - clamp(speed, 0.0F, 1.0F),
+                animationDeltaSeconds * 60.0F);
+        float next = current + (target - current) * timeAdjustedSpeed;
         return Math.abs(next - target) < 0.003F ? target : next;
     }
 
@@ -1349,7 +1471,8 @@ public final class ClickGui extends Screen {
         CATEGORY,
         FAVORITES,
         CONFIG,
-        FRIENDS
+        FRIENDS,
+        SETTINGS
     }
 
     private enum GuiSize {
