@@ -1,23 +1,19 @@
 {
   "schemaVersion": 1,
-  "id": "motionblurr",
+  "id": "vanishclient",
   "version": "${version}",
-  "name": "motionblurr",
-  "description": "Motion Blur for fabric",
-  "contact": {
-    "sources": "https://github.com/Noryea/motionblur-fabric",
-    "issues": "https://github.com/Noryea/motionblur-fabric/issues"
-  },
+  "name": "VanishClient",
+  "description": "VanishClient for Fabric",
   "license": "CC0-1.0",
-  "icon": "assets/motionblurr/icon.png",
+  "icon": "assets/vanishclient/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "cc.motionblurr.MotionBlurrClient"
+      "cc.vanishclient.VanishClient"
     ]
   },
   "mixins": [
-    "motionblurr.mixins.json"
+    "vanishclient.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.17.3",

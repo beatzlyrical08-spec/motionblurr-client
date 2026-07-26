@@ -93,7 +93,7 @@ jar {
         rename { "${it}_${inputs.properties.archivesName}"}
     }
     manifest {
-        attributes 'Premain-Class': 'cc.motionblurr.utils.jvm.Agent'
+        attributes 'Premain-Class': 'cc.vanishclient.utils.jvm.Agent'
     }
 }
 
