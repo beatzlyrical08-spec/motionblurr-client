@@ -1,5 +1,8 @@
 package cc.vanishclient.gui.icons;
 
+import cc.vanishclient.VanishClient;
+import net.minecraft.util.Identifier;
+
 public enum IconKey {
     ANCHOR("anchor"),
     APPLE("apple"),
@@ -23,6 +26,10 @@ public enum IconKey {
     }
 
     public String resourcePath() {
-        return "assets/vanishclient/textures/icons/" + resourceName + ".svg";
+        return "assets/" + VanishClient.MOD_ID + "/textures/icons/" + resourceName + ".png";
+    }
+
+    public Identifier textureIdentifier() {
+        return Identifier.of(VanishClient.MOD_ID, "textures/icons/" + resourceName + ".png");
     }
 }

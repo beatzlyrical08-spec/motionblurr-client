@@ -4,6 +4,7 @@ import cc.vanishclient.VanishClient;
 import cc.vanishclient.gui.animation.SmoothAnimation;
 import cc.vanishclient.gui.icons.IconKey;
 import cc.vanishclient.gui.icons.ModuleIconRegistry;
+import cc.vanishclient.gui.icons.TextureIconManager;
 import cc.vanishclient.module.Category;
 import cc.vanishclient.module.Module;
 import cc.vanishclient.module.setting.BooleanSetting;
@@ -19,7 +20,6 @@ import cc.vanishclient.utils.friend.FriendManager;
 import cc.vanishclient.utils.keybinding.KeyUtils;
 import cc.vanishclient.utils.render.RenderUtils;
 import cc.vanishclient.gui.nanovg.NanoVGRenderer;
-import cc.vanishclient.gui.nanovg.SvgIconManager;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -39,7 +39,7 @@ import java.util.UUID;
 public final class ClickGui extends Screen {
     private static final boolean NANOVG_VALIDATION_MODE = false;
     private final NanoVGRenderer nanoVG = NanoVGRenderer.getInstance();
-    private final SvgIconManager svgIcons = SvgIconManager.getInstance();
+    private final TextureIconManager textureIcons = TextureIconManager.getInstance();
     private final ModuleIconRegistry moduleIcons = ModuleIconRegistry.getInstance();
     private static final int BACKDROP = 0xD9050610;
     private static final int WINDOW = 0xF2181A24;
@@ -431,7 +431,7 @@ public final class ClickGui extends Screen {
             RenderUtils.drawRoundedRect(context, x + 3, y + 6, 2, h - 12, 2, ACCENT);
         }
 
-        drawSvgIcon(context, icon, x + 10 + offset, y + 5, 13,
+        drawIcon(context, icon, x + 10 + offset, y + 5, 13,
                 selected ? ACCENT : lerpColor(TEXT_DIM, TEXT_MUTED, hover), 1.0F);
         drawText(context, label, x + 28 + offset, y + 8,
                 selected ? TEXT : lerpColor(TEXT_MUTED, TEXT_SOFT, hover), false);
@@ -845,23 +845,16 @@ public final class ClickGui extends Screen {
     }
 
     private void drawModuleIcon(DrawContext context, Module module, int x, int y, int size, int color, float alpha) {
-        drawSvgIcon(context, moduleIcons.iconFor(module), x, y, size, color, alpha);
+        drawIcon(context, moduleIcons.iconFor(module), x, y, size, color, alpha);
     }
 
     private void drawCategoryMark(DrawContext context, Category category, int x, int y, int size, boolean selected, float hover) {
         int color = selected ? ACCENT : lerpColor(withAlpha(ACCENT, 165), TEXT_MUTED, hover * 0.2F);
-        drawSvgIcon(context, moduleIcons.iconFor(category), x, y, size, color, 1.0F);
+        drawIcon(context, moduleIcons.iconFor(category), x, y, size, color, 1.0F);
     }
 
-    private void drawSvgIcon(DrawContext context, IconKey icon, int x, int y, int size, int color, float alpha) {
-        if (nanoVG.isInFrame()) {
-            svgIcons.draw(icon, x, y, size, size, color, alpha);
-            return;
-        }
-        int fallbackSize = Math.max(5, size / 2);
-        int fallbackX = x + (size - fallbackSize) / 2;
-        int fallbackY = y + (size - fallbackSize) / 2;
-        RenderUtils.drawRoundedRect(context, fallbackX, fallbackY, fallbackSize, fallbackSize, Math.max(2, fallbackSize / 2), color);
+    private void drawIcon(DrawContext context, IconKey icon, int x, int y, int size, int color, float alpha) {
+        textureIcons.draw(context, icon, x, y, size, size, color, alpha);
     }
 
     private String iconForCategory(Category category) {
@@ -1607,13 +1600,13 @@ public final class ClickGui extends Screen {
     }
 
     private void pushScissor(DrawContext context, float x, float y, float w, float h) {
+        context.enableScissor(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h));
         if (nanoVG.isInFrame()) nanoVG.pushScissor(x, y, w, h);
-        else context.enableScissor(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h));
     }
 
     private void popScissor(DrawContext context) {
         if (nanoVG.isInFrame()) nanoVG.popScissor();
-        else context.disableScissor();
+        context.disableScissor();
     }
 
     private boolean isLeftOrRight(int button) {

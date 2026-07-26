@@ -140,8 +140,8 @@ public class NanoVGRenderer {
     }
 
     public static void cleanup() {
+        NanoVGImage.cleanup();
         NanoVGFrameManager.resetInFrame();
         NanoVGContext.cleanup();
     }
 }
-

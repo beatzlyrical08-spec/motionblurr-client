@@ -8,15 +8,21 @@ import cc.vanishclient.module.modules.misc.*;
 import cc.vanishclient.module.modules.movement.*;
 import cc.vanishclient.module.modules.player.*;
 import cc.vanishclient.module.modules.render.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public final class ModuleIconRegistry {
+    private static final Logger LOGGER = LoggerFactory.getLogger("VanishClient/ModuleIcons");
     private static final ModuleIconRegistry INSTANCE = new ModuleIconRegistry();
 
     private final Map<Class<? extends Module>, IconKey> moduleIcons = new HashMap<>();
+    private final Set<Class<? extends Module>> warnedFallbackModules = new HashSet<>();
 
     private ModuleIconRegistry() {
         registerCombat();
@@ -40,6 +46,7 @@ public final class ModuleIconRegistry {
         IconKey semantic = semanticIcon(module.getClass().getSimpleName(), module.getName(), module.getDescription());
         if (semantic != null) return semantic;
 
+        warnFallbackOnce(module);
         return categoryFallback(module.getModuleCategory());
     }
 
@@ -140,6 +147,8 @@ public final class ModuleIconRegistry {
 
     private IconKey semanticIcon(String className, String displayName, String description) {
         String text = normalize(className + " " + displayName + " " + description);
+        if (text.contains("triggerbot")) return IconKey.SWORD;
+        if (text.contains("killaura")) return IconKey.SWORDS;
         if (text.contains("anchor")) return IconKey.ANCHOR;
         if (text.contains("mace")) return IconKey.GAVEL;
         if (text.contains("axe")) return IconKey.AXE;
@@ -149,10 +158,20 @@ public final class ModuleIconRegistry {
         if (text.contains("mine") || text.contains("tool") || text.contains("pickaxe") || text.contains("craft") || text.contains("place")) return IconKey.PICKAXE;
         if (text.contains("friend") || text.contains("team") || text.contains("player")) return IconKey.USER;
         if (text.contains("sword")) return IconKey.SWORD;
+        if (text.contains("windcharge") || text.contains("wind charge")) return IconKey.SPARKLE;
         if (text.contains("critical") || text.contains("crystal") || text.contains("visual") || text.contains("render")) return IconKey.SPARKLE;
         if (text.contains("config") || text.contains("profile")) return IconKey.FOLDER_OPEN;
+        if (text.contains("create")) return IconKey.FOLDER_PLUS;
         if (text.contains("favorite")) return IconKey.STAR_PLUS;
         return null;
+    }
+
+    private void warnFallbackOnce(Module module) {
+        Class<? extends Module> moduleClass = module.getClass();
+        if (warnedFallbackModules.add(moduleClass)) {
+            LOGGER.warn("No icon mapping for module {} ({}); using {} fallback.",
+                    module.getName(), moduleClass.getName(), categoryFallback(module.getModuleCategory()));
+        }
     }
 
     private IconKey categoryFallback(Category category) {

@@ -18,10 +18,11 @@ public class CategoryIcon {
 
         ICON_MAP.put(Category.COMBAT, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/sword.png"));
         ICON_MAP.put(Category.PLAYER, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/user.png"));
-        ICON_MAP.put(Category.MOVEMENT, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/accessibility.png"));
-        ICON_MAP.put(Category.MISC, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/harddrive.png"));
-        ICON_MAP.put(Category.RENDER, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/eye.png"));
-        ICON_MAP.put(Category.CLIENT, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/computer.png"));
+        ICON_MAP.put(Category.MOVEMENT, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/sport-shoe.png"));
+        ICON_MAP.put(Category.MISC, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/sparkle.png"));
+        ICON_MAP.put(Category.RENDER, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/sparkle.png"));
+        ICON_MAP.put(Category.CLIENT, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/folder-open.png"));
+        ICON_MAP.put(Category.CONFIG, NanoVGRenderer.loadImage("assets/vanishclient/textures/icons/folder-open.png"));
 
         initialized = true;
     }
@@ -34,11 +35,10 @@ public class CategoryIcon {
         if (imageId == null || imageId == -1)
             return;
 
-        NanoVGRenderer.drawImage(imageId, x, y, ICON_SIZE, ICON_SIZE, Color.WHITE);
+        NanoVGRenderer.drawImage(imageId, x, y, ICON_SIZE, ICON_SIZE, color);
     }
 
     public static int getIconSize() {
         return ICON_SIZE;
     }
 }
-
