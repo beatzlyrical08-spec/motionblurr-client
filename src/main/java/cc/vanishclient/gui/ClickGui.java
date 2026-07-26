@@ -1,6 +1,7 @@
 package cc.vanishclient.gui;
 
 import cc.vanishclient.VanishClient;
+import cc.vanishclient.gui.animation.SmoothAnimation;
 import cc.vanishclient.gui.icons.IconKey;
 import cc.vanishclient.gui.icons.ModuleIconRegistry;
 import cc.vanishclient.module.Category;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -63,15 +65,17 @@ public final class ClickGui extends Screen {
     private static final int CARD_HEIGHT = 28;
     private static final int SETTING_HEIGHT = 34;
     private static final int GAP = 5;
+    private static final String[] SETTINGS_TABS = {"General", "Targets", "Weapon", "Rotation", "Render"};
 
     private final Map<Category, Float> categoryHoverAnimations = new EnumMap<>(Category.class);
-    private final Map<Module, Float> moduleHoverAnimations = new HashMap<>();
-    private final Map<Module, Float> moduleToggleAnimations = new HashMap<>();
-    private final Map<Module, Float> moduleSelectAnimations = new HashMap<>();
-    private final Map<Setting, Float> settingHoverAnimations = new HashMap<>();
-    private final Map<Setting, Float> sliderAnimations = new HashMap<>();
-    private final Map<Setting, Float> settingToggleAnimations = new HashMap<>();
-    private final Map<String, Float> stringHoverAnimations = new HashMap<>();
+    private final Map<Module, Float> moduleHoverAnimations = new IdentityHashMap<>();
+    private final Map<Module, Float> moduleToggleAnimations = new IdentityHashMap<>();
+    private final Map<Module, Float> moduleSelectAnimations = new IdentityHashMap<>();
+    private final Map<Module, Float> favoriteAnimations = new IdentityHashMap<>();
+    private final Map<Setting, Float> settingHoverAnimations = new IdentityHashMap<>();
+    private final Map<Setting, Float> sliderAnimations = new IdentityHashMap<>();
+    private final Map<Setting, Float> settingToggleAnimations = new IdentityHashMap<>();
+    private final Map<Object, Float> stableHoverAnimations = new HashMap<>();
     private final Set<Module> favorites = new HashSet<>();
 
     private Category selectedCategory = Category.COMBAT;
@@ -108,6 +112,7 @@ public final class ClickGui extends Screen {
     private float popupAnimationProgress;
     private float searchFocusAnimation;
     private float pulseAnimation;
+    private float guiOpenAnimation;
     private long lastRenderNanos = System.nanoTime();
     private float animationDeltaSeconds = 1.0F / 60.0F;
 
@@ -126,6 +131,8 @@ public final class ClickGui extends Screen {
         selectedProfile = manager.getActiveProfile();
         ACCENT = accentPreset.color;
         ACCENT_2 = accentPreset.secondary;
+        guiOpenAnimation = 0.0F;
+        lastRenderNanos = System.nanoTime();
         super.init();
     }
 
@@ -255,10 +262,11 @@ public final class ClickGui extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         long now = System.nanoTime();
-        animationDeltaSeconds = clamp((now - lastRenderNanos) / 1_000_000_000.0F, 1.0F / 240.0F, 0.1F);
+        animationDeltaSeconds = clamp((now - lastRenderNanos) / 1_000_000_000.0F, 0.0F, 0.05F);
         lastRenderNanos = now;
         pulseAnimation += animationDeltaSeconds * 2.1F;
         searchFocusAnimation = animate(searchFocusAnimation, searchFocused ? 1.0F : 0.0F, 0.18F);
+        guiOpenAnimation = animate(guiOpenAnimation, 1.0F, 0.18F);
 
         Layout layout = getLayout();
         ensureSelectedModule();
@@ -286,23 +294,43 @@ public final class ClickGui extends Screen {
 
     private void renderGuiContents(DrawContext context, Layout layout, int mouseX, int mouseY) {
         drawBackdrop(context);
-        drawWindow(context, layout);
-        drawSidebar(context, layout, mouseX, mouseY);
-        drawTopBar(context, layout, mouseX, mouseY);
-        if (viewMode == ViewMode.CONFIG) {
-            drawProfilePanel(context, layout, mouseX, mouseY);
-            drawCustomizationPanel(context, layout, mouseX, mouseY);
-                } else if (viewMode == ViewMode.FRIENDS) {
-                    drawFriendPanel(context, layout, mouseX, mouseY);
-                    drawFriendHelpPanel(context, layout);
-                } else if (viewMode == ViewMode.SETTINGS) {
-                    drawGuiSettingsPage(context, layout, mouseX, mouseY);
-        } else {
-            drawModulePanel(context, layout, mouseX, mouseY);
-            drawSettingsPopup(context, layout, mouseX, mouseY);
+        boolean transformed = beginGuiOpenTransform(layout);
+        try {
+            drawWindow(context, layout);
+            drawSidebar(context, layout, mouseX, mouseY);
+            drawTopBar(context, layout, mouseX, mouseY);
+            if (viewMode == ViewMode.CONFIG) {
+                drawProfilePanel(context, layout, mouseX, mouseY);
+                drawCustomizationPanel(context, layout, mouseX, mouseY);
+            } else if (viewMode == ViewMode.FRIENDS) {
+                drawFriendPanel(context, layout, mouseX, mouseY);
+                drawFriendHelpPanel(context, layout);
+            } else if (viewMode == ViewMode.SETTINGS) {
+                drawGuiSettingsPage(context, layout, mouseX, mouseY);
+            } else {
+                drawModulePanel(context, layout, mouseX, mouseY);
+                drawSettingsPopup(context, layout, mouseX, mouseY);
+            }
+            drawBottomBar(context, layout, mouseX, mouseY);
+            drawProfileCreateModal(context, layout, mouseX, mouseY);
+        } finally {
+            if (transformed) nanoVG.restore();
         }
-        drawBottomBar(context, layout, mouseX, mouseY);
-        drawProfileCreateModal(context, layout, mouseX, mouseY);
+    }
+
+    private boolean beginGuiOpenTransform(Layout layout) {
+        if (!nanoVG.isInFrame()) return false;
+        float progress = SmoothAnimation.smoothstep(guiOpenAnimation);
+        if (progress >= 0.999F) return false;
+        float scale = lerp(0.96F, 1.0F, progress);
+        float centerX = layout.x + layout.w * 0.5F;
+        float centerY = layout.y + layout.h * 0.5F;
+        nanoVG.save();
+        nanoVG.globalAlpha(progress);
+        nanoVG.translate(centerX, centerY + lerp(7.0F, 0.0F, progress));
+        nanoVG.scale(scale, scale);
+        nanoVG.translate(-centerX, -centerY);
+        return true;
     }
 
     private void drawNanoVGValidation(Layout layout) {
@@ -330,8 +358,12 @@ public final class ClickGui extends Screen {
     }
 
     private void drawWindow(DrawContext context, Layout layout) {
+        if (nanoVG.isInFrame()) {
+            nanoVG.shadow(layout.x, layout.y + 3, layout.w, layout.h, 18, 0x33000000, 18);
+        }
         RenderUtils.drawRoundedRect(context, layout.x, layout.y, layout.w, layout.h, 18, WINDOW);
         RenderUtils.drawRoundedRect(context, layout.x + 4, layout.y + 4, layout.w - 8, layout.h - 8, 15, 0xF01A1C27);
+        drawBorder(context, layout.x, layout.y, layout.w, layout.h, 18, 0x2EFFFFFF);
     }
 
     private void drawSidebar(DrawContext context, Layout layout, int mouseX, int mouseY) {
@@ -389,7 +421,7 @@ public final class ClickGui extends Screen {
 
     private int drawSidebarAction(DrawContext context, String label, IconKey icon, boolean selected, int x, int y, int w, int h, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, h);
-        float hover = animate(stringHoverAnimations, "nav:" + label, hovered ? 1.0F : 0.0F, 0.18F);
+        float hover = animate(stableHoverAnimations, label, hovered ? 1.0F : 0.0F, 0.18F);
         int offset = Math.round(lerp(0, 4, easeOutCubic(hover)));
 
         if (hover > 0.01F) RenderUtils.drawRoundedRect(context, x, y, w, h, 7, withAlpha(0xFF252A42, (int) (90 * hover)));
@@ -434,7 +466,7 @@ public final class ClickGui extends Screen {
 
     private void drawTopIconButton(DrawContext context, String label, int x, int y, boolean accent, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, 22, 22);
-        float hover = animate(stringHoverAnimations, "top:" + label, hovered ? 1.0F : 0.0F, 0.18F);
+        float hover = animate(stableHoverAnimations, label, hovered ? 1.0F : 0.0F, 0.18F);
         RenderUtils.drawRoundedRect(context, x, y, 22, 22, 7, lerpColor(0x44111523, 0xAA1F2436, hover));
         drawCenteredText(context, label, x + 11, y + 7,
                 accent ? lerpColor(ACCENT, TEXT, hover) : lerpColor(TEXT_MUTED, TEXT_SOFT, hover));
@@ -495,7 +527,7 @@ public final class ClickGui extends Screen {
                 lerpColor(TEXT_SOFT, TEXT, Math.max(hover, selected)), false);
 
         boolean favorite = favorites.contains(module);
-        float fav = animate(stringHoverAnimations, "fav:" + module.getName(), favorite ? 1.0F : 0.0F, 0.18F);
+        float fav = animate(favoriteAnimations, module, favorite ? 1.0F : 0.0F, 0.18F);
         drawToggle(context, x + w - 58, drawY + 8, toggle, false);
         RenderUtils.drawRoundedRect(context, x + w - 17, drawY + 10, 7, 7, favorite ? 4 : 2,
                 lerpColor(TEXT_DIM, ACCENT, Math.max(fav, module == selectedModule ? 0.7F : 0.0F)));
@@ -592,7 +624,8 @@ public final class ClickGui extends Screen {
         SliderBounds bounds = getSliderBounds(x, y, w);
         double range = setting.getMax() - setting.getMin();
         double progress = range <= 0.0D ? 0.0D : clamp((setting.getValue() - setting.getMin()) / range, 0.0D, 1.0D);
-        int fillWidth = (int) Math.round(bounds.width * progress);
+        float visualProgress = animate(sliderAnimations, key, (float) progress, 0.18F);
+        int fillWidth = (int) Math.round(bounds.width * visualProgress);
         int knobCenter = bounds.x + fillWidth;
         int knobX = clamp(knobCenter - 4, bounds.x - 1, bounds.x + bounds.width - 7);
         RenderUtils.drawRoundedRect(context, bounds.x, bounds.y, bounds.width, bounds.height, bounds.height / 2, 0xFF30354A);
@@ -664,7 +697,7 @@ public final class ClickGui extends Screen {
             boolean active = profile.equalsIgnoreCase(activeProfile);
             boolean selected = profile.equalsIgnoreCase(selectedProfile);
             boolean hovered = isHovered(mouseX, mouseY, layout.moduleX + 14, y, layout.moduleW - 28, 34);
-            float hover = animate(stringHoverAnimations, "profile:" + profile, hovered ? 1.0F : 0.0F, 0.16F);
+            float hover = animate(stableHoverAnimations, profile, hovered ? 1.0F : 0.0F, 0.16F);
             float fill = Math.max(hover, active ? 0.75F : selected ? 0.45F : 0.0F);
             RenderUtils.drawRoundedRect(context, layout.moduleX + 14, y, layout.moduleW - 28, 30, 8, lerpColor(ROW, active ? withAlpha(ACCENT, 120) : ROW_HOVER, fill));
             drawText(context, profile, layout.moduleX + 26, y + 13, active ? TEXT : TEXT_SOFT, false);
@@ -685,7 +718,7 @@ public final class ClickGui extends Screen {
         drawText(context, "Size", layout.settingsX + 16, y, TEXT_MUTED, false);
         y += 16;
         for (GuiSize size : GuiSize.values()) {
-            drawOptionRow(context, "size:" + size.name(), size.label, guiSize == size, layout.settingsX + 14, y, layout.settingsW - 28, mouseX, mouseY);
+            drawOptionRow(context, size, size.label, guiSize == size, layout.settingsX + 14, y, layout.settingsW - 28, mouseX, mouseY);
             y += 34;
         }
 
@@ -693,7 +726,7 @@ public final class ClickGui extends Screen {
         drawText(context, "Accent", layout.settingsX + 16, y, TEXT_MUTED, false);
         y += 16;
         for (AccentPreset preset : AccentPreset.values()) {
-            drawOptionRow(context, "accent:" + preset.name(), preset.label, accentPreset == preset, layout.settingsX + 14, y, layout.settingsW - 28, mouseX, mouseY);
+            drawOptionRow(context, preset, preset.label, accentPreset == preset, layout.settingsX + 14, y, layout.settingsW - 28, mouseX, mouseY);
             RenderUtils.drawRoundedRect(context, layout.settingsX + layout.settingsW - 42, y + 8, 20, 14, 5, preset.color);
             y += 34;
             if (y > layout.settingsY + layout.settingsH - 40) break;
@@ -737,7 +770,7 @@ public final class ClickGui extends Screen {
 
         for (String friend : friends) {
             boolean hovered = isHovered(mouseX, mouseY, layout.moduleX + 14, y, layout.moduleW - 28, 34);
-            float hover = animate(stringHoverAnimations, "friend:" + friend, hovered ? 1.0F : 0.0F, 0.16F);
+            float hover = animate(stableHoverAnimations, friend, hovered ? 1.0F : 0.0F, 0.16F);
             RenderUtils.drawRoundedRect(context, layout.moduleX + 14, y, layout.moduleW - 28, 34, 10, lerpColor(ROW, ROW_HOVER, hover));
             drawText(context, trimToWidth(friend, layout.moduleW - 92), layout.moduleX + 26, y + 13, TEXT_SOFT, false);
             drawText(context, "x", layout.moduleX + layout.moduleW - 42, y + 13, RED, false);
@@ -767,17 +800,16 @@ public final class ClickGui extends Screen {
     }
 
     private void drawSettingsTabs(DrawContext context, Layout layout) {
-        String[] tabs = {"General", "Targets", "Weapon", "Rotation", "Render"};
         int x = layout.settingsX + 10;
         int y = layout.settingsY + 52;
         int maxRight = layout.settingsX + layout.settingsW - 10;
         drawRect(context, layout.settingsX, y - 10, layout.settingsW, 1, 0x3330354A);
-        for (int i = 0; i < tabs.length; i++) {
-            String tab = tabs[i];
+        for (int i = 0; i < SETTINGS_TABS.length; i++) {
+            String tab = SETTINGS_TABS[i];
             int tabW = Math.max(38, textWidth(tab) + 10);
             if (x + tabW > maxRight) break;
             boolean active = i == 0;
-            float hover = animate(stringHoverAnimations, "tab:" + tab, active ? 1.0F : 0.0F, 0.18F);
+            float hover = animate(stableHoverAnimations, tab, active ? 1.0F : 0.0F, 0.18F);
             drawText(context, tab, x + 3, y, active ? ACCENT : TEXT_MUTED, false);
             if (hover > 0.01F) {
                 RenderUtils.drawRoundedRect(context, x, y + 14, tabW, 2, 1, withAlpha(ACCENT, (int) (205 * hover)));
@@ -805,7 +837,7 @@ public final class ClickGui extends Screen {
 
     private void drawBottomTab(DrawContext context, String label, String icon, int x, int y, int w, boolean active, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, 20);
-        float hover = animate(stringHoverAnimations, "bottom:" + label, hovered || active ? 1.0F : 0.0F, 0.18F);
+        float hover = animate(stableHoverAnimations, label, hovered || active ? 1.0F : 0.0F, 0.18F);
         RenderUtils.drawRoundedRect(context, x, y, w, 20, 7, active ? 0xDD241A43 : lerpColor(0x88111523, 0xAA1C2132, hover));
         drawBorder(context, x, y, w, 20, 7, withAlpha(ACCENT, active ? 180 : (int) (55 * hover)));
         RenderUtils.drawRoundedRect(context, x + 9, y + 7, 7, 7, 3, active ? ACCENT : TEXT_MUTED);
@@ -851,9 +883,9 @@ public final class ClickGui extends Screen {
         drawText(context, value.isEmpty() ? placeholder : trimToWidth(value, w - 18), x + 10, y + 11, value.isEmpty() ? TEXT_DIM : TEXT_SOFT, false);
     }
 
-    private void drawOptionRow(DrawContext context, String key, String label, boolean selected, int x, int y, int w, int mouseX, int mouseY) {
+    private void drawOptionRow(DrawContext context, Object key, String label, boolean selected, int x, int y, int w, int mouseX, int mouseY) {
         boolean hovered = isHovered(mouseX, mouseY, x, y, w, 28);
-        float hover = animate(stringHoverAnimations, key, hovered ? 1.0F : 0.0F, 0.16F);
+        float hover = animate(stableHoverAnimations, key, hovered ? 1.0F : 0.0F, 0.16F);
         RenderUtils.drawRoundedRect(context, x, y, w, 28, 9, lerpColor(ROW, ROW_HOVER, Math.max(hover, selected ? 0.72F : 0.0F)));
         if (selected) drawBorder(context, x, y, w, 28, 9, withAlpha(ACCENT, 150));
         drawText(context, label, x + 10, y + 10, selected ? TEXT : TEXT_MUTED, false);
@@ -936,7 +968,7 @@ public final class ClickGui extends Screen {
             return true;
         }
 
-        if (popupModule != null && isHovered(mouseX, mouseY, popupX + popupW - 42, popupY + 12, 28, 13)
+        if (popupModule != null && !popupClosing && isHovered(mouseX, mouseY, popupX + popupW - 42, popupY + 12, 28, 13)
                 && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             popupModule.toggle();
             markProfileDirty();
@@ -1507,10 +1539,19 @@ public final class ClickGui extends Screen {
 
     private void drawBorderedRoundedRect(DrawContext context, int x, int y, int w, int h, int radius, int fill, int border) {
         RenderUtils.drawRoundedRect(context, x, y, w, h, radius, fill);
+        drawBorder(context, x, y, w, h, radius, border);
     }
 
     private void drawBorder(DrawContext context, int x, int y, int w, int h, int radius, int color) {
-        // Deliberately borderless: hierarchy is conveyed through filled shades and glow.
+        if (w <= 0 || h <= 0 || ((color >>> 24) & 255) == 0) return;
+        if (nanoVG.isInFrame()) {
+            nanoVG.roundedRectOutline(x, y, w, h, radius, 1.0F, color);
+            return;
+        }
+        context.fill(x, y, x + w, y + 1, color);
+        context.fill(x, y + h - 1, x + w, y + h, color);
+        context.fill(x, y, x + 1, y + h, color);
+        context.fill(x + w - 1, y, x + w, y + h, color);
     }
 
     private void drawRightText(DrawContext context, String text, int x, int y, int right, int color) {
@@ -1612,10 +1653,8 @@ public final class ClickGui extends Screen {
     }
 
     private float animate(float current, float target, float speed) {
-        float timeAdjustedSpeed = 1.0F - (float) Math.pow(1.0F - clamp(speed, 0.0F, 1.0F),
-                animationDeltaSeconds * 60.0F);
-        float next = current + (target - current) * timeAdjustedSpeed;
-        return Math.abs(next - target) < 0.003F ? target : next;
+        float resolvedSpeed = speed <= 1.0F ? speed * 90.0F : speed;
+        return SmoothAnimation.approach(current, target, resolvedSpeed, animationDeltaSeconds);
     }
 
     private <T> float animate(Map<T, Float> map, T key, float target, float speed) {

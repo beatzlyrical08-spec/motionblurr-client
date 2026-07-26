@@ -117,6 +117,22 @@ public final class NanoVGRenderer {
         }
     }
 
+    public void roundedRectOutline(float x, float y, float width, float height, float radius, float strokeWidth, int argb) {
+        requireFrame();
+        if (width <= 0.0F || height <= 0.0F || strokeWidth <= 0.0F || ((argb >>> 24) & 255) == 0) return;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            float inset = strokeWidth * 0.5F;
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x + inset, y + inset,
+                    Math.max(0.0F, width - strokeWidth),
+                    Math.max(0.0F, height - strokeWidth),
+                    Math.max(0.0F, radius - inset));
+            nvgStrokeWidth(vg, strokeWidth);
+            nvgStrokeColor(vg, color(stack, argb));
+            nvgStroke(vg);
+        }
+    }
+
     public void rect(float x, float y, float width, float height, int argb) {
         requireFrame();
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -193,6 +209,31 @@ public final class NanoVGRenderer {
     public void popScissor() {
         requireFrame();
         nvgRestore(vg);
+    }
+
+    public void save() {
+        requireFrame();
+        nvgSave(vg);
+    }
+
+    public void restore() {
+        requireFrame();
+        nvgRestore(vg);
+    }
+
+    public void translate(float x, float y) {
+        requireFrame();
+        nvgTranslate(vg, x, y);
+    }
+
+    public void scale(float x, float y) {
+        requireFrame();
+        nvgScale(vg, x, y);
+    }
+
+    public void globalAlpha(float alpha) {
+        requireFrame();
+        nvgGlobalAlpha(vg, Math.max(0.0F, Math.min(1.0F, alpha)));
     }
 
     private boolean initializeIfReady() {
